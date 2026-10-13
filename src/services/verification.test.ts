@@ -183,4 +183,75 @@ describe('MONVEIL Comprehensive Verification & Bounty Test Suite', () => {
       expect(aiResponse.explanation).toContain('amounts do not match');
     });
   });
+
+  describe('6. Phase 3 Boundary, Edge-Case & Missing Evidence Audit', () => {
+    it('rejects malformed ECDSA signatures (invalid hex / truncated)', async () => {
+      const bill = await createSampleBill('honest');
+      const malformedBill1 = { ...bill, signature: '0x12345' };
+      const v1 = await verifyBillSignature(malformedBill1);
+      expect(v1.valid).toBe(false);
+
+      const malformedBill2 = { ...bill, signature: '0x' + 'g'.repeat(130) };
+      const v2 = await verifyBillSignature(malformedBill2);
+      expect(v2.valid).toBe(false);
+    });
+
+    it('never silently passes missing line-item evidence', async () => {
+      const bill = await createSampleBill('honest');
+      const missingEvidenceBill = { ...bill, items: [] };
+      const result = await runGuardianChecks(missingEvidenceBill);
+
+      expect(result.verdict).not.toBe('safe');
+      expect(result.verdict).toBe('review');
+      expect(result.lineItemStatus).toBe('unavailable');
+    });
+
+    it('blocks invalid monetary values (negative or zero paise)', async () => {
+      const bill = await createSampleBill('honest');
+      const negativeBill = { ...bill, amountPaise: -1000 as any };
+      const resNeg = await runGuardianChecks(negativeBill);
+      expect(resNeg.verdict).toBe('blocked');
+      expect(resNeg.reasonCode).toBe('amount');
+
+      const zeroBill = { ...bill, amountPaise: asPaise(0) };
+      const resZero = await runGuardianChecks(zeroBill);
+      expect(resZero.verdict).toBe('blocked');
+      expect(resZero.reasonCode).toBe('amount');
+    });
+
+    it('strictly enforces expiry boundary condition', async () => {
+      const bill = await createSampleBill('honest');
+      const expiredBoundaryBill = { ...bill, expiresAt: Date.now() - 5 };
+      const resExpired = await runGuardianChecks(expiredBoundaryBill);
+      expect(resExpired.verdict).toBe('blocked');
+      expect(resExpired.reasonCode).toBe('expiry');
+      const expiryCheck = resExpired.checks.find((c) => c.id === 'expiry');
+      expect(expiryCheck?.status).toBe('blocked');
+
+      const validBoundaryBill = { ...bill, expiresAt: Date.now() + 60_000 };
+      const resValid = await runGuardianChecks(validBoundaryBill);
+      const validCheck = resValid.checks.find((c) => c.id === 'expiry');
+      expect(validCheck?.status).toBe('pass');
+    });
+
+    it('strictly enforces per-transaction spending limit boundary', async () => {
+      // Per-payment default limit is ₹2,000 (200,000 paise)
+      const billAtLimit = await signBill(
+        [{ id: 'item', name: 'Item', quantity: 1, unitPricePaise: asPaise(190476) }],
+        { taxBasisPoints: 500 }
+      );
+      // Ensure total is <= 200,000 paise
+      const resAtLimit = await runGuardianChecks({ ...billAtLimit, amountPaise: asPaise(200000), signedTotalPaise: asPaise(200000) });
+      const rulesCheckPass = resAtLimit.checks.find((c) => c.id === 'rules');
+      expect(rulesCheckPass?.status).toBe('pass');
+
+      // Boundary breach by 1 paise (200,001 paise = ₹2,000.01)
+      const resBreach = await runGuardianChecks({ ...billAtLimit, amountPaise: asPaise(200001), signedTotalPaise: asPaise(200001) });
+      expect(resBreach.verdict).toBe('blocked');
+      expect(resBreach.reasonCode).toBe('rules');
+      const rulesCheckFail = resBreach.checks.find((c) => c.id === 'rules');
+      expect(rulesCheckFail?.status).toBe('blocked');
+    });
+  });
 });
+

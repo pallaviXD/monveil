@@ -42,11 +42,41 @@ export function getDeterministicFallbackExplanation(
  * Server-side Kimi (Moonshot) API call.
  * Kept secure in server context: uses KIMI_API_KEY from server environment.
  */
+export interface AiExplanationResponse {
+  explanation: string;
+  /**
+   * 'kimi'                — explanation came from a live Kimi (Moonshot) LLM response.
+   * 'deterministic-fallback' — explanation came from Guardian's rule engine; Kimi was NOT used.
+   * Never set 'kimi' when the live call failed — the distinction is the contract with the UI.
+   */
+  source: 'kimi' | 'deterministic-fallback';
+  /**
+   * Fine-grained reason code so the UI can display an honest label.
+   * 'success'            — live Kimi call succeeded.
+   * 'quota-exhausted'    — HTTP 429 / insufficient balance.
+   * 'api-key-missing'    — no KIMI_API_KEY / MOONSHOT_API_KEY in server env.
+   * 'empty-response'     — Kimi replied but returned no content.
+   * 'timeout-or-network' — AbortError / fetch threw before a response arrived.
+   * 'server-unreachable' — client could not reach the /api/ai/explain proxy.
+   * 'http-NNN'           — any other non-2xx HTTP status from Kimi.
+   * 'fallback-returned'  — server replied but explicitly used the fallback (legacy path).
+   */
+  statusReason:
+    | 'success'
+    | 'quota-exhausted'
+    | 'api-key-missing'
+    | 'empty-response'
+    | 'timeout-or-network'
+    | 'server-unreachable'
+    | 'fallback-returned'
+    | (string & Record<never, never>); // http-NNN passthrough
+}
+
 export async function generateKimiExplanationServer(
   req: ExplanationRequest,
   apiKey?: string,
   endpoint?: string
-): Promise<{ explanation: string; source: 'kimi' | 'deterministic-fallback' }> {
+): Promise<AiExplanationResponse> {
   const fallback = getDeterministicFallbackExplanation({
     bill: req.bill,
     verdict: req.verdict,
@@ -55,7 +85,7 @@ export async function generateKimiExplanationServer(
 
   const key = apiKey || process.env.KIMI_API_KEY || process.env.MOONSHOT_API_KEY;
   if (!key) {
-    return { explanation: fallback, source: 'deterministic-fallback' };
+    return { explanation: fallback, source: 'deterministic-fallback', statusReason: 'api-key-missing' };
   }
 
   const resolvedEndpoint =
@@ -112,8 +142,13 @@ ${req.checks.map((c) => `  * ${c.label}: ${c.status.toUpperCase()} (${c.explanat
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.warn(`Kimi API returned HTTP ${response.status}. Using deterministic fallback.`);
-      return { explanation: fallback, source: 'deterministic-fallback' };
+      // 429 = rate-limit, 402 = payment required (insufficient Kimi balance)
+      const statusReason =
+        response.status === 429 || response.status === 402
+          ? 'quota-exhausted'
+          : `http-${response.status}`;
+      console.warn(`Kimi API returned HTTP ${response.status} (${statusReason}). Using deterministic fallback.`);
+      return { explanation: fallback, source: 'deterministic-fallback', statusReason };
     }
 
     const data = (await response.json()) as {
@@ -122,20 +157,28 @@ ${req.checks.map((c) => `  * ${c.label}: ${c.status.toUpperCase()} (${c.explanat
     const content = data.choices?.[0]?.message?.content?.trim();
 
     if (content) {
-      return { explanation: content, source: 'kimi' };
+      return { explanation: content, source: 'kimi', statusReason: 'success' };
     }
 
-    return { explanation: fallback, source: 'deterministic-fallback' };
+    return { explanation: fallback, source: 'deterministic-fallback', statusReason: 'empty-response' };
   } catch (error) {
     console.warn('Kimi API call timed out or failed. Using deterministic fallback.', error);
-    return { explanation: fallback, source: 'deterministic-fallback' };
+    return { explanation: fallback, source: 'deterministic-fallback', statusReason: 'timeout-or-network' };
   }
 }
 
 /**
  * Client-side helper that invokes the secure server endpoint `/api/ai/explain`.
  */
-export async function requestAiExplanation(result: GuardianResult): Promise<string> {
+export async function requestAiExplanationDetailed(
+  result: GuardianResult
+): Promise<AiExplanationResponse> {
+  const fallback = getDeterministicFallbackExplanation({
+    bill: result.bill,
+    verdict: result.verdict,
+    reasonCode: result.reasonCode,
+  });
+
   try {
     const res = await fetch('/api/ai/explain', {
       method: 'POST',
@@ -150,16 +193,27 @@ export async function requestAiExplanation(result: GuardianResult): Promise<stri
     });
 
     if (res.ok) {
-      const data = (await res.json()) as { explanation?: string };
-      if (data.explanation) return data.explanation;
+      const data = (await res.json()) as Partial<AiExplanationResponse>;
+      if (data.explanation) {
+        return {
+          explanation: data.explanation,
+          source: data.source === 'kimi' ? 'kimi' : 'deterministic-fallback',
+          statusReason: data.statusReason ?? (data.source === 'kimi' ? 'success' : 'fallback-returned'),
+        };
+      }
     }
   } catch {
     // If server endpoint is unreachable (e.g. offline preview), use local deterministic explanation
   }
 
-  return getDeterministicFallbackExplanation({
-    bill: result.bill,
-    verdict: result.verdict,
-    reasonCode: result.reasonCode,
-  });
+  return {
+    explanation: fallback,
+    source: 'deterministic-fallback',
+    statusReason: 'server-unreachable',
+  };
+}
+
+export async function requestAiExplanation(result: GuardianResult): Promise<string> {
+  const detailed = await requestAiExplanationDetailed(result);
+  return detailed.explanation;
 }

@@ -2,7 +2,7 @@ import type { ActivityItem, AppRules, Bill, BillItem, GuardianCheck, GuardianRes
 import { asPaise, calculateTax } from '../domain/money';
 import { verifyBillSignature, signBillEip712 } from './merchantRegistry';
 import { authenticatePasskey, encryptReceiptWithPrf, type PasskeyAccount } from './passkey';
-import { requestAiExplanation } from './kimiExplanation';
+import { requestAiExplanation, requestAiExplanationDetailed } from './kimiExplanation';
 import { executeMonadSettlement } from './blockchain';
 
 const STORAGE = { activity: 'monveil.activity.v1', rules: 'monveil.rules.v1', paid: 'monveil.paid.v1', currentBill: 'monveil.currentBill.v1', currency: 'monveil.currency.v1' } as const;
@@ -170,23 +170,24 @@ export async function runGuardianChecks(bill: Bill): Promise<GuardianResult> {
   const rules = currentRules();
   const activity = safeRead<ActivityItem[]>(STORAGE.activity, seedActivity());
   const dailySpend = activity.filter((entry) => entry.paymentStatus === 'confirmed' && new Date(entry.date).toDateString() === new Date().toDateString()).reduce((sum, entry) => sum + entry.amountPaise, 0);
+  const validAmount = Number.isSafeInteger(bill.amountPaise) && bill.amountPaise > 0 && Number.isSafeInteger(bill.signedTotalPaise) && bill.signedTotalPaise > 0;
   const validSignature = bill.signatureValid ?? await signatureMatches(bill);
-  const amountMatches = bill.amountPaise === bill.signedTotalPaise;
-  const unexpired = bill.expiresAt >= Date.now();
+  const amountMatches = validAmount && bill.amountPaise === bill.signedTotalPaise;
+  const unexpired = bill.expiresAt > Date.now();
   const duplicate = isPreviouslyPaid(bill) || bill.scenario === 'replay';
   const merchantBlocked = rules.blockedMerchants.some((name) => name.toLowerCase() === bill.merchantName.toLowerCase());
-  const underLimits = bill.amountPaise <= rules.perPaymentLimitPaise && dailySpend + bill.amountPaise <= rules.dailyCapPaise && !merchantBlocked;
+  const underLimits = validAmount && bill.amountPaise <= rules.perPaymentLimitPaise && dailySpend + bill.amountPaise <= rules.dailyCapPaise && !merchantBlocked;
   const checks: GuardianCheck[] = [
     { id: 'seal', label: 'Bill seal', status: validSignature ? 'pass' : 'blocked', explanation: validSignature ? 'This QR matches the merchant-sealed bill.' : 'The QR details do not match the merchant-sealed bill.' },
-    { id: 'amount', label: 'Amount', status: amountMatches ? 'pass' : 'blocked', explanation: amountMatches ? 'The requested amount matches the signed total.' : 'The QR requests a different amount from the signed bill.' },
+    { id: 'amount', label: 'Amount', status: amountMatches ? 'pass' : 'blocked', explanation: !validAmount ? 'Invalid or non-positive monetary amount.' : amountMatches ? 'The requested amount matches the signed total.' : 'The QR requests a different amount from the signed bill.' },
     { id: 'expiry', label: 'Expiry', status: unexpired ? 'pass' : 'blocked', explanation: unexpired ? 'This bill is still within its valid time.' : 'This bill has expired.' },
     { id: 'duplicate', label: 'Not paid before', status: duplicate ? 'blocked' : 'pass', explanation: duplicate ? 'This bill has already been paid in the demo.' : 'No earlier payment is recorded for this bill.' },
-    { id: 'rules', label: 'Your rules', status: underLimits ? 'pass' : 'blocked', explanation: merchantBlocked ? 'This merchant is on your blocked list.' : bill.amountPaise > rules.perPaymentLimitPaise ? 'This bill is above your per-payment limit.' : dailySpend + bill.amountPaise > rules.dailyCapPaise ? 'This payment would exceed your daily cap.' : 'This bill fits within your saved limits.' },
+    { id: 'rules', label: 'Your rules', status: underLimits ? 'pass' : 'blocked', explanation: merchantBlocked ? 'This merchant is on your blocked list.' : !validAmount ? 'Invalid monetary value.' : bill.amountPaise > rules.perPaymentLimitPaise ? 'This bill is above your per-payment limit.' : dailySpend + bill.amountPaise > rules.dailyCapPaise ? 'This payment would exceed your daily cap.' : 'This bill fits within your saved limits.' },
   ];
   const lineStatus = verifyLines(bill);
   const failed = checks.find((check) => check.status === 'blocked');
-  const verdict = failed ? 'blocked' : lineStatus === 'review' ? 'review' : 'safe';
-  return { bill, verdict, checks, lineItemStatus: lineStatus, reasonCode: !amountMatches ? 'amount' : failed?.id ?? (lineStatus === 'review' ? 'line-items' : undefined), createdAt: Date.now() };
+  const verdict = failed ? 'blocked' : (lineStatus === 'review' || lineStatus === 'unavailable') ? 'review' : 'safe';
+  return { bill, verdict, checks, lineItemStatus: lineStatus, reasonCode: !amountMatches ? 'amount' : failed?.id ?? (lineStatus === 'review' || lineStatus === 'unavailable' ? 'line-items' : undefined), createdAt: Date.now() };
 }
 
 function verifyLines(bill: Bill): IntegrityStatus {
@@ -201,6 +202,11 @@ function verifyLines(bill: Bill): IntegrityStatus {
 export async function explainResult(result: GuardianResult): Promise<string> {
   await delay(120);
   return requestAiExplanation(result);
+}
+
+export async function explainResultDetailed(result: GuardianResult) {
+  await delay(120);
+  return requestAiExplanationDetailed(result);
 }
 
 const seedActivity = (): ActivityItem[] => {

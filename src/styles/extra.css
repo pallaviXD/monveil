@@ -4,3 +4,26 @@
 @media(max-width:767px){.hero-stamp{display:none}}
 
 .verdict-amount-ring{position:relative;overflow:hidden}.verdict-ring-svg{pointer-events:none}
+
+/* ── Phase 4–7: Transparency UI Styles ─────────────────────────────── */
+.settlement-mode-banner{display:flex;align-items:flex-start;gap:10px;padding:11px 16px;margin-bottom:18px;border-radius:10px;font-size:11px;line-height:1.6}
+.settlement-mode-banner svg{flex:none;margin-top:1px}
+.settlement-mode-banner--live{background:rgba(61,220,151,.08);border:1px solid rgba(61,220,151,.22);color:#93E6BE}
+.settlement-mode-banner--live strong{color:#3DDC97}
+.settlement-mode-banner--simulated{background:rgba(255,176,32,.07);border:1px solid rgba(255,176,32,.2);color:#F4D49B}
+.settlement-mode-banner--simulated strong{color:#FFB020}
+.settlement-mode-banner--simulated svg{color:#FFB020}
+.settlement-mode-banner--pending{background:rgba(255,176,32,.07);border:1px solid rgba(255,176,32,.2);color:#F4D49B}
+.settlement-mode-banner--pending strong{color:#FFB020}
+.settlement-mode-banner--pending svg{color:#FFB020}
+.settlement-mode-banner--rejected{background:rgba(255,93,93,.07);border:1px solid rgba(255,93,93,.22);color:#F4AEAE}
+.settlement-mode-banner--rejected strong{color:#FF5D5D}
+.settlement-mode-banner--rejected svg{color:#FF5D5D}
+.inline-link{color:inherit;text-decoration:underline;text-underline-offset:2px;white-space:nowrap}
+.inline-link:hover{opacity:.8}
+.ai-fallback-note{display:flex;align-items:flex-start;gap:6px;margin:10px 0 0;padding:8px 10px;border-radius:7px;background:rgba(255,176,32,.07);border:1px solid rgba(255,176,32,.18);color:#C9B87A;font-size:10px;line-height:1.5}
+.ai-fallback-note svg{flex:none;margin-top:1px;color:#FFB020}
+.passkey-result-card{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.passkey-scope-note{display:flex;align-items:flex-start;gap:6px;padding:9px 11px;border-radius:8px;background:rgba(167,139,250,.07);border:1px solid rgba(167,139,250,.15);color:#B9B3CC;font-size:10px;line-height:1.6;text-align:left}
+.passkey-scope-note svg{flex:none;margin-top:2px;color:#9D83E8}
+.passkey-scope-note em{font-style:normal;color:#D4C8FF;font-weight:600}

@@ -1,0 +1,61 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1A1833', 'primaryTextColor': '#F4F0FC', 'primaryBorderColor': '#4C3F8A', 'lineColor': '#9D83E8', 'background': '#12102A', 'fontFamily': 'ui-monospace, monospace'}}}%%
+sequenceDiagram
+  autonumber
+
+  actor Merchant
+  participant POS as Merchant POS
+  participant QR as Signed QR
+  actor Customer
+  participant Guardian as Guardian Engine
+  participant KimiProxy as /api/ai/explain
+  participant Wallet as EVM Wallet
+  participant Registry as Monad Registry
+  participant AUSD as Agora AUSD
+  participant Envio as Envio HyperIndex
+
+  Note over Merchant,QR: Bill creation (off-chain)
+  Merchant->>POS: Enter items, quantities, prices
+  POS->>POS: Compute subtotal + tax (integer paise)
+  POS->>POS: EIP-712 sign with merchant private key
+  POS->>QR: Emit signed JSON QR payload
+
+  Note over Customer,Guardian: Verification (on-device, before any wallet action)
+  Customer->>Guardian: Scan QR or load scenario
+  Guardian->>Guardian: Check 1 - Verify EIP-712 signature vs TRUSTED_MERCHANTS
+  Guardian->>Guardian: Check 2 - Compare requested paise vs signed total
+  Guardian->>Guardian: Check 3 - Validate expiry timestamp
+  Guardian->>Guardian: Check 4 - Check billIdHash vs local duplicate cache
+  Guardian->>Guardian: Check 5 - Evaluate user spending rules
+  Guardian->>Guardian: Audit line-item arithmetic (advisory)
+  Guardian-->>Customer: Verdict: safe / review / blocked
+
+  Note over KimiProxy: AI explanation (server-side, never blocks Guardian)
+  Guardian->>KimiProxy: POST structured verification result
+  KimiProxy->>KimiProxy: Call Moonshot API (moonshot-v1-8k)
+  alt Kimi available
+    KimiProxy-->>Customer: Live AI explanation (source: kimi)
+  else Kimi unavailable
+    KimiProxy-->>Customer: Deterministic fallback (source: deterministic-fallback)
+  end
+
+  Note over Customer,Registry: Payment authorization (explicit user action required)
+  alt Verdict is safe
+    Customer->>Wallet: Hold-to-pay gesture triggers wallet call
+    Wallet->>Customer: Request explicit transaction approval
+    Customer->>Wallet: Approve
+    Wallet->>Registry: settleWithToken(billId, reportHash, AUSD, amount, merchant)
+    Registry->>AUSD: transferFrom(payer, merchant, tokenAmount)
+    AUSD-->>Registry: Transfer success
+    Registry->>Registry: Mark billIdHash as recorded (replay prevention)
+    Registry-->>Wallet: Emit ReceiptRecorded + PaymentSettled events
+    Wallet-->>Customer: Transaction hash returned
+    Note over Wallet: App polls RPC for confirmation
+    Registry-->>Customer: Status: submitted > confirmed (or rejected/failed)
+  else No wallet connected
+    Note over Customer: Simulated demo receipt (isSimulated=true)
+    Note over Customer: No tx broadcast, no tokens moved
+  end
+
+  Note over Envio: Indexing (requires deployed Envio instance)
+  Registry-->>Envio: ReceiptRecorded event (when indexer running)
+  Envio-->>Customer: Indexed history in /activity (when available)

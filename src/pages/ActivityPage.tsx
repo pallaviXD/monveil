@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, Ban, CalendarDays, CheckCircle2, ChevronRight, Search, ShieldCheck, X, Database, ExternalLink } from 'lucide-react';
+import { Activity, Ban, CalendarDays, CheckCircle2, ChevronRight, Search, ShieldCheck, X, Database, ExternalLink, AlertCircle } from 'lucide-react';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import type { ActivityItem } from '../domain/types';
 import { formatINR } from '../domain/money';
 import { getActivity } from '../services/mockApi';
-import { fetchIndexedReceipts, type IndexedReceipt } from '../services/envio';
+import { fetchIndexedReceipts, type IndexedReceipt, type EnvioSource } from '../services/envio';
 import { EmptyState, Skeleton, Surface, StatusIcon } from '../components/ui';
 import { ActivityStatus, PageHeading, ScenarioLabel } from './shared';
 import { useDemo } from '../app/DemoContext';
@@ -25,7 +25,8 @@ export function ActivityPage() {
   const [filter, setFilter] = useState<Filter>('All');
   const [selected, setSelected] = useState<ActivityItem | null>(null);
   const [envioRecords, setEnvioRecords] = useState<IndexedReceipt[]>([]);
-  const [envioStatus, setEnvioStatus] = useState<'ready' | 'offline'>('offline');
+  const [envioStatus, setEnvioStatus] = useState<'checking' | EnvioSource>('checking');
+  const [envioReason, setEnvioReason] = useState<string | undefined>();
 
   useEffect(() => {
     let alive = true;
@@ -38,7 +39,8 @@ export function ActivityPage() {
     fetchIndexedReceipts(5).then((res) => {
       if (alive) {
         setEnvioRecords(res.receipts);
-        setEnvioStatus(res.source === 'envio-indexer' ? 'ready' : 'offline');
+        setEnvioStatus(res.source);
+        setEnvioReason(res.reason);
       }
     });
 
@@ -119,8 +121,26 @@ export function ActivityPage() {
               Real-time indexer monitoring ReceiptRecorded & PaymentSettled events on Monad Testnet (Chain ID 10143)
             </p>
           </div>
-          <span className={`pill ${envioStatus === 'ready' ? 'green' : 'muted'}`} style={{ fontSize: '0.75rem' }}>
-            {envioStatus === 'ready' ? 'ENVIO SYNCED' : 'INDEXER READY (OFFLINE/STANDBY)'}
+          <span
+            className={`pill ${envioStatus === 'envio-live' ? 'green' : envioStatus === 'envio-live-empty' ? 'amber' : 'muted'}`}
+            style={{ fontSize: '0.75rem' }}
+            title={
+              envioStatus === 'envio-live'
+                ? 'Envio HyperIndex returned real indexed events from Monad Testnet'
+                : envioStatus === 'envio-live-empty'
+                ? 'The Envio indexer is reachable but no on-chain events have been indexed yet'
+                : envioStatus === 'checking'
+                ? 'Checking Envio HyperIndex endpoint…'
+                : envioStatus === 'indexer-unavailable'
+                ? 'Envio hosted indexer is offline or unreachable'
+                : 'A GraphQL error was returned by the Envio indexer'
+            }
+          >
+            {envioStatus === 'envio-live' && 'ENVIO · LIVE'}
+            {envioStatus === 'envio-live-empty' && 'ENVIO · LIVE (NO EVENTS)'}
+            {envioStatus === 'checking' && 'ENVIO · CHECKING…'}
+            {envioStatus === 'indexer-unavailable' && 'ENVIO · OFFLINE'}
+            {envioStatus === 'graphql-error' && 'ENVIO · ERROR'}
           </span>
         </div>
 
@@ -148,7 +168,10 @@ export function ActivityPage() {
           </div>
         ) : (
           <p className="field-hint" style={{ margin: '8px 0 0' }}>
-            Envio HyperIndex schema configured for <code>MonveilVerificationRegistry (0x4a6b…83c7)</code>. Verified on-chain receipts are indexed as live blocks are mined.
+            {envioStatus === 'checking' && 'Connecting to Envio HyperIndex…'}
+            {envioStatus === 'envio-live-empty' && 'The Envio indexer is reachable but no on-chain events have been indexed yet. Events will appear here once real on-chain receipts are mined.'}
+            {envioStatus === 'indexer-unavailable' && (envioReason ?? 'The Envio indexer is offline or unreachable. Check back shortly.')}
+            {envioStatus === 'graphql-error' && (envioReason ?? 'A GraphQL error was returned by the Envio indexer. Check back shortly.')}
           </p>
         )}
       </Surface>

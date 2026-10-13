@@ -51,6 +51,27 @@ export function getExplorerAddressUrl(address: string): string {
   return `${MONAD_TESTNET_CHAIN.blockExplorers.default.url}/address/${address}`;
 }
 
+/**
+ * Polls the Monad Testnet RPC for a transaction receipt.
+ * Returns the canonical PaymentStatus based on the on-chain result.
+ *
+ * 'submitted'  — hash exists, block not yet mined
+ * 'confirmed'  — mined with status=success
+ * 'rejected'   — mined with status=reverted (contract rejected the call)
+ * 'failed'     — RPC error or hash not found after timeout
+ */
+export async function getOnChainTxStatus(
+  txHash: Hash
+): Promise<'submitted' | 'confirmed' | 'rejected' | 'failed'> {
+  try {
+    const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+    if (!receipt) return 'submitted';
+    return receipt.status === 'success' ? 'confirmed' : 'rejected';
+  } catch {
+    return 'failed';
+  }
+}
+
 export async function checkWalletConnection(): Promise<WalletState> {
   if (typeof window === 'undefined' || !(window as unknown as { ethereum?: unknown }).ethereum) {
     return {
@@ -242,12 +263,18 @@ export async function executeMonadSettlement(
 
     const explorerUrl = getExplorerTxUrl(txHash);
 
+    // Real on-chain transaction — populate explicit tx fields
     return {
       id: `TX-${txHash.slice(0, 10).toUpperCase()}`,
       bill,
-      status: 'confirmed',
+      status: 'submitted', // DemoContext will poll/update to 'confirmed' once mined
       submittedAt: now,
-      confirmedAt: now + 800,
+      isSimulated: false,
+      txHash,
+      explorerUrl,
+      networkLabel: `Monad Testnet (Chain ID ${MONAD_TESTNET_CHAIN.id})`,
+      registryContract: DEFAULT_MONVEIL_REGISTRY_ADDRESS,
+      // Keep deprecated fields for backward-compat with existing ReceiptPage reads
       detailHash: txHash,
       detailContract: DEFAULT_MONVEIL_REGISTRY_ADDRESS,
       detailNetwork: `Monad Testnet (${MONAD_TESTNET_CHAIN.id})`,
@@ -256,18 +283,25 @@ export async function executeMonadSettlement(
     };
   }
 
-  // Fallback to simulated testnet record with honest labeling
-  const simHash = `0x${reportHash.slice(2, 34)}${bill.signature.slice(0, 32)}`;
+  // ── Simulated receipt (no wallet connected) ──────────────────────────────
+  // No tokens were moved. No transaction was broadcast.
+  // Never set isSimulated=false here; never generate a fake 0x…64 tx hash.
   return {
-    id: `PAY-${now.toString(36).toUpperCase()}`,
+    id: `SIM-${now.toString(36).toUpperCase()}`,
     bill,
-    status: 'confirmed',
+    status: 'confirmed', // local demo flow resolves immediately
     submittedAt: now - 350,
     confirmedAt: now,
+    isSimulated: true,
+    txHash: undefined,
+    explorerUrl: undefined,
+    networkLabel: 'Monad Testnet (no wallet — simulated)',
+    registryContract: DEFAULT_MONVEIL_REGISTRY_ADDRESS,
     simulatedProofId: `proof-${bill.id.toLowerCase()}`,
     simulatedProofUrl: `#simulated-proof-${bill.id.toLowerCase()}`,
-    detailHash: simHash,
-    detailContract: `Guardian · Monad Testnet (${DEFAULT_MONVEIL_REGISTRY_ADDRESS.slice(0, 10)}…)`,
+    // Deprecated fields — kept for ReceiptPage backward-compat
+    detailHash: `sim-${reportHash.slice(2, 18)}`,
+    detailContract: `Guardian · ${DEFAULT_MONVEIL_REGISTRY_ADDRESS.slice(0, 10)}… (simulated)`,
     detailNetwork: 'Monad Testnet (Simulated / Unconnected Wallet)',
   };
 }

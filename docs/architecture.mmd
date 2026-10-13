@@ -1,0 +1,106 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1A1833', 'primaryTextColor': '#F4F0FC', 'primaryBorderColor': '#4C3F8A', 'lineColor': '#7B6CB0', 'secondaryColor': '#241E42', 'tertiaryColor': '#12102A', 'background': '#12102A', 'mainBkg': '#1A1833', 'nodeBorder': '#4C3F8A', 'clusterBkg': '#12102A', 'titleColor': '#D8CCFF', 'edgeLabelBackground': '#1A1833', 'fontFamily': 'ui-monospace, monospace'}}}%%
+flowchart TD
+
+  subgraph MERCHANT["Merchant POS (/merchant)"]
+    direction TB
+    M_ITEMS["Bill items, quantities, prices"]
+    M_SIGN["EIP-712 signer\n(secp256k1, merchant key)"]
+    M_QR["Signed QR code payload"]
+    M_TAMPER["Tamper demo (+200 to amount)"]
+    M_ITEMS --> M_SIGN --> M_QR
+    M_ITEMS -.->|optional demo| M_TAMPER --> M_QR
+  end
+
+  subgraph CUSTOMER["Customer Interface"]
+    direction TB
+    C_SCAN["QR scanner / scenario loader\n(/scan, /home)"]
+    C_BILL["Bill preview (/bill)"]
+    C_VERDICT["Guardian verdict + AI explanation\n(/verdict)"]
+    C_PAY["Hold-to-pay authorization\n(/pay)"]
+    C_RECEIPT["Receipt + tx status\n(/receipt)"]
+    C_ACTIVITY["Activity history\n(/activity)"]
+    C_SCAN --> C_BILL --> C_VERDICT --> C_PAY --> C_RECEIPT
+    C_RECEIPT -.-> C_ACTIVITY
+  end
+
+  subgraph GUARDIAN["Guardian Verification Engine (on-device)"]
+    direction TB
+    G1["1. Bill seal\nEIP-712 signature vs trusted registry"]
+    G2["2. Amount match\nrequested == signed total (paise)"]
+    G3["3. Expiry\n10-min validity window"]
+    G4["4. Duplicate check\nbillIdHash vs local + on-chain state"]
+    G5["5. Spending rules\nper-tx limit, daily cap, blocked merchants"]
+    G_LI["Line-item audit\nsubtotal + tax arithmetic"]
+    G1 & G2 & G3 & G4 & G5 --> G_VERDICT["Verdict: safe / review / blocked"]
+    G_LI -.->|advisory| G_VERDICT
+  end
+
+  subgraph KIMI_BLOCK["Kimi AI (server-side proxy)"]
+    K_PROXY["Vite middleware /api/ai/explain\nserver/plugin.ts"]
+    K_MOON["Moonshot API\napi.moonshot.cn/v1\nmoonshot-v1-8k"]
+    K_FALLBACK["Deterministic fallback\n(always available)"]
+    K_PROXY --> K_MOON
+    K_MOON -.->|unavailable / auth fail| K_FALLBACK
+  end
+
+  subgraph PASSKEY_BLOCK["Passkey + PRF Vault"]
+    P_AUTH["WebAuthn registration + authentication\nW3C Level 3, platform authenticator"]
+    P_PRF["PRF extension\nhardware-derived 256-bit key"]
+    P_AES["AES-256-GCM local encryption\nreceipt line items + notes"]
+    P_FALLBACK["Software key fallback\n(no PRF support in browser)"]
+    P_AUTH --> P_PRF --> P_AES
+    P_AUTH -.->|PRF unsupported| P_FALLBACK --> P_AES
+  end
+
+  subgraph WALLET["Wallet + Authorization"]
+    W_CONNECT["EVM wallet connection\n(MetaMask, Rabby, etc.)"]
+    W_SIGN["User explicit authorization\nhold-to-pay gesture"]
+    W_TX["viem writeContract\n(submit to Monad RPC)"]
+    W_POLL["RPC polling for confirmation\nconfirmed / rejected / failed"]
+    W_CONNECT --> W_SIGN --> W_TX --> W_POLL
+  end
+
+  subgraph ONCHAIN["Monad Testnet (Chain ID 10143)"]
+    direction TB
+    C_REGISTRY["MonveilVerificationRegistry\n0x8a82a7314fbf17a590420B8d7De3044ab21f633B\nrecordReceipt / settleWithToken / settleWithNative"]
+    C_AUSD["Agora AUSD ERC-20\n0x83eF2633E78e7a64B4c7333B32E1858737EB6673\ntransferFrom (payer to merchant)"]
+    C_EVENTS["Events emitted\nReceiptRecorded / PaymentSettled"]
+    C_REGISTRY -->|AUSD settlement| C_AUSD
+    C_REGISTRY --> C_EVENTS
+  end
+
+  subgraph ENVIO_BLOCK["Envio HyperIndex (external, requires deployment)"]
+    E_CONFIG["config.yaml\nnetwork 10143, start block 70742452"]
+    E_HANDLERS["EventHandlers.ts\nReceiptRecorded, PaymentSettled"]
+    E_GQL["GraphQL endpoint\nReceiptRecord, PaymentSettlement entities"]
+    E_CONFIG --> E_HANDLERS --> E_GQL
+  end
+
+  %% Data flows
+  M_QR -->|scan or load| C_SCAN
+  C_BILL -->|bill payload| GUARDIAN
+  G_VERDICT -->|structured result| K_PROXY
+  K_PROXY -->|explanation + source badge| C_VERDICT
+  C_VERDICT -->|safe verdict| C_PAY
+  C_PAY --> W_SIGN
+  W_SIGN --> P_AUTH
+  P_AUTH --> W_TX
+  W_TX -->|on-chain call| C_REGISTRY
+  W_POLL -->|tx status| C_RECEIPT
+  P_AES -->|encrypted vault + key fingerprint| C_RECEIPT
+  E_GQL -.->|indexed events (when deployed)| C_ACTIVITY
+  C_EVENTS -.->|ingested by| E_HANDLERS
+
+  %% Simulation path (no wallet)
+  C_PAY -.->|no wallet connected| SIM["Simulated demo receipt\n(isSimulated=true, no tx broadcast)"]
+  SIM -.-> C_RECEIPT
+
+  classDef onchain fill:#1a0d3a,stroke:#7B3FE4,color:#D8CCFF
+  classDef offchain fill:#0d1f2d,stroke:#2D7D9A,color:#C8E6F0
+  classDef ui fill:#1A1833,stroke:#4C3F8A,color:#E8E0FF
+  classDef external fill:#1a1a0d,stroke:#7A7A20,color:#E0E0B0
+  classDef sim fill:#2a1a0d,stroke:#8A5020,color:#E0C8A0,stroke-dasharray:4 2
+
+  class C_REGISTRY,C_AUSD,C_EVENTS onchain
+  class ENVIO_BLOCK,K_MOON external
+  class SIM sim

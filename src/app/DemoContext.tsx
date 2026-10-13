@@ -1,12 +1,15 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { AppRules, Bill, GuardianResult, PaymentReceipt, Scenario } from '../domain/types';
-import { clearDemoData, createSampleBill, explainResult, getRules, getStoredBill, parseBillQr, payBill, runGuardianChecks, setRules as persistRules, storeCurrentBill } from '../services/mockApi';
+import type { AiExplanationResponse } from '../services/kimiExplanation';
+import { clearDemoData, createSampleBill, explainResultDetailed, getRules, getStoredBill, parseBillQr, payBill, runGuardianChecks, setRules as persistRules, storeCurrentBill } from '../services/mockApi';
+import { getOnChainTxStatus } from '../services/blockchain';
 
 interface DemoContextValue {
   bill: Bill | null;
   result: GuardianResult | null;
   explanation: string;
+  aiExplanationMeta: AiExplanationResponse | null;
   receipt: PaymentReceipt | null;
   rules: AppRules | null;
   toast: { message: string; tone: 'normal' | 'error' } | null;
@@ -27,6 +30,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
   const [bill, setBillState] = useState<Bill | null>(() => getStoredBill());
   const [result, setResult] = useState<GuardianResult | null>(null);
   const [explanation, setExplanation] = useState('');
+  const [aiExplanationMeta, setAiExplanationMeta] = useState<AiExplanationResponse | null>(null);
   const [receipt, setReceipt] = useState<PaymentReceipt | null>(null);
   const [rules, setRulesState] = useState<AppRules | null>(null);
   const [toast, setToast] = useState<DemoContextValue['toast']>(null);
@@ -36,6 +40,7 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     setBillState(next);
     setResult(null);
     setExplanation('');
+    setAiExplanationMeta(null);
     setReceipt(null);
     storeCurrentBill(next);
   }, []);
@@ -69,8 +74,9 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     try {
       const nextResult = await runGuardianChecks(bill);
       setResult(nextResult);
-      const words = await explainResult(nextResult);
-      setExplanation(words);
+      const aiResp = await explainResultDetailed(nextResult);
+      setExplanation(aiResp.explanation);
+      setAiExplanationMeta(aiResp);
       return nextResult;
     } catch (error) {
       notify(error instanceof Error ? error.message : 'Guardian could not check this bill. Try again.', 'error');
@@ -87,8 +93,30 @@ export function DemoProvider({ children }: { children: ReactNode }) {
       const confirmed = await payBill(bill);
       setReceipt(confirmed);
       navigate('/receipt');
+
+      // For real on-chain transactions (wallet was connected), poll the RPC
+      // to get the canonical confirmed/rejected status rather than trusting the
+      // optimistic 'submitted' status returned immediately by writeContract.
+      if (!confirmed.isSimulated && confirmed.txHash) {
+        const txHash = confirmed.txHash as `0x${string}`;
+        // Poll up to ~15 s (5 attempts × 3 s)
+        let attempts = 0;
+        const poll = async () => {
+          attempts++;
+          const onChainStatus = await getOnChainTxStatus(txHash);
+          if (onChainStatus === 'confirmed' || onChainStatus === 'rejected' || onChainStatus === 'failed') {
+            setReceipt((prev) =>
+              prev ? { ...prev, status: onChainStatus, confirmedAt: onChainStatus === 'confirmed' ? Date.now() : undefined } : prev
+            );
+          } else if (attempts < 5) {
+            window.setTimeout(() => void poll(), 3000);
+          }
+          // After 5 attempts, leave as 'submitted' — the receipt page explains the pending state
+        };
+        window.setTimeout(() => void poll(), 2500);
+      }
     } catch (error) {
-      const failed: PaymentReceipt = { id: paymentId, bill, status: 'failed', submittedAt: Date.now() };
+      const failed: PaymentReceipt = { id: paymentId, bill, status: 'failed', submittedAt: Date.now(), isSimulated: true };
       setReceipt(failed);
       navigate('/receipt');
       notify(error instanceof Error ? error.message : 'Payment could not be confirmed. No real money was used.', 'error');
@@ -109,12 +137,13 @@ export function DemoProvider({ children }: { children: ReactNode }) {
     setBill(null);
     setResult(null);
     setExplanation('');
+    setAiExplanationMeta(null);
     setReceipt(null);
     setRulesState(null);
     notify('Demo data reset.');
   }, [notify, setBill]);
 
-  const value = useMemo(() => ({ bill, result, explanation, receipt, rules, toast, loading, setBill, startScenario, scanPayload, evaluateBill, submitPayment, loadRules, saveRules, notify, resetDemo }), [bill, result, explanation, receipt, rules, toast, loading, setBill, startScenario, scanPayload, evaluateBill, submitPayment, loadRules, saveRules, notify, resetDemo]);
+  const value = useMemo(() => ({ bill, result, explanation, aiExplanationMeta, receipt, rules, toast, loading, setBill, startScenario, scanPayload, evaluateBill, submitPayment, loadRules, saveRules, notify, resetDemo }), [bill, result, explanation, aiExplanationMeta, receipt, rules, toast, loading, setBill, startScenario, scanPayload, evaluateBill, submitPayment, loadRules, saveRules, notify, resetDemo]);
   return <DemoContext.Provider value={value}>{children}</DemoContext.Provider>;
 }
 

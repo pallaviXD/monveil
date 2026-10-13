@@ -27,6 +27,13 @@ export interface EncryptedReceiptVault {
   keyFingerprint: string;
   merchantScope: string;
   encryptedAt: number;
+  /**
+   * 'prf'       — key was derived from real WebAuthn PRF output (hardware-bound, passkey-scoped).
+   * 'fallback'  — key was derived from a hash of merchantScope; NOT hardware-bound.
+   *               This still encrypts the data but provides no passkey-level security guarantee.
+   *               Always shown to the user — never labelled as PRF encryption.
+   */
+  keySource: 'prf' | 'fallback';
 }
 
 const STORAGE_KEYS = {
@@ -147,10 +154,18 @@ export async function registerPasskey(userName = 'monveil-user'): Promise<Passke
   } catch (error: unknown) {
     const err = error as { name?: string; message?: string };
     if (err.name === 'NotAllowedError') {
+      // User explicitly dismissed the passkey prompt — propagate so UI can inform them
       throw new Error('Passkey creation was cancelled by the user.');
     }
-    // Graceful fallback to simulated passkey if device hardware authenticator is absent
-    console.warn('Passkey hardware prompt unavailable, activating testnet passkey session:', err.message);
+    if (err.name === 'NotSupportedError') {
+      throw new Error('This device or browser does not support the required passkey features.');
+    }
+    if (err.name === 'SecurityError') {
+      throw new Error('Passkey registration failed due to a security restriction (RP ID mismatch or insecure context).');
+    }
+    // Hardware authenticator absent or other unexpected error — fall back to simulated session
+    // and clearly mark it as simulated so callers can expose that to the user.
+    console.warn('Passkey hardware prompt unavailable, activating simulated passkey session:', err.message);
     return createSimulatedAccount();
   }
 }
@@ -233,16 +248,29 @@ export async function authenticatePasskey(): Promise<{
   } catch (error: unknown) {
     const err = error as { name?: string; message?: string };
     if (err.name === 'NotAllowedError') {
-      throw new Error('Passkey prompt cancelled.');
+      // User explicitly dismissed — do not silently simulate; let the caller decide
+      throw new Error('Passkey authentication was cancelled by the user.');
     }
-    // Return simulated passkey session
+    if (err.name === 'NotSupportedError') {
+      throw new Error('This browser or authenticator does not support the required passkey features.');
+    }
+    if (err.name === 'SecurityError') {
+      throw new Error('Passkey authentication failed due to a security restriction.');
+    }
+    // Other unexpected errors (e.g. no authenticator available) — fall back to simulated session
+    console.warn('Passkey authentication unavailable, falling back to simulated session:', err.message);
     const simulated = createSimulatedAccount();
     return { account: simulated };
   }
 }
 
 /**
- * Encrypts private receipt payload using PRF-derived key material or fallback AES-GCM.
+ * Encrypts private receipt payload using PRF-derived key material or a deterministic fallback.
+ *
+ * When `key` is provided it came from a real WebAuthn PRF evaluation → keySource='prf'.
+ * When `key` is absent, a key is derived from a hash of merchantScope → keySource='fallback'.
+ * The fallback still encrypts the data but is NOT hardware-bound and NOT passkey-scoped.
+ * The caller must surface keySource to the user so they know which protection level was applied.
  */
 export async function encryptReceiptWithPrf(
   receiptData: Record<string, unknown>,
@@ -254,8 +282,11 @@ export async function encryptReceiptWithPrf(
   const iv = crypto.getRandomValues(new Uint8Array(12));
 
   let cryptoKey = key;
+  const keySource: 'prf' | 'fallback' = key ? 'prf' : 'fallback';
+
   if (!cryptoKey) {
-    // Generate deterministic demo receipt vault key
+    // Fallback: deterministic AES key from merchant scope hash.
+    // This is NOT hardware-bound. It does not provide PRF-level security.
     const rawKey = await crypto.subtle.digest(
       'SHA-256',
       enc.encode(`monveil-vault-key-${merchantScope}`)
@@ -281,6 +312,7 @@ export async function encryptReceiptWithPrf(
     keyFingerprint: toBase64Url(await crypto.subtle.digest('SHA-256', enc.encode(merchantScope))).slice(0, 12),
     merchantScope,
     encryptedAt: Date.now(),
+    keySource,
   };
 }
 

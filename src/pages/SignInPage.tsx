@@ -1,26 +1,37 @@
 import { useState } from 'react';
-import { ArrowLeft, Fingerprint, ShieldCheck, Sparkles, KeyRound } from 'lucide-react';
+import { ArrowLeft, Fingerprint, ShieldCheck, Sparkles, KeyRound, Info, AlertTriangle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BrandLogo, Button, ModeBadge, StatusRail } from '../components/ui';
+import { BrandLogo, Button, StatusRail } from '../components/ui';
 import { connectWithPasskey } from '../services/mockApi';
-import { integrationConfig } from '../services/config';
+import { isPasskeySupported } from '../services/passkey';
 
 export function SignInPage() {
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [authMethod, setAuthMethod] = useState<'passkey' | 'demo-passkey' | null>(null);
   const [error, setError] = useState('');
+  const nativeSupported = isPasskeySupported();
 
   const handleConnect = async () => {
     setBusy(true);
     setError('');
     try {
-      await connectWithPasskey();
+      const result = await connectWithPasskey();
+      setAuthMethod(result.method);
       setConnected(true);
-      window.setTimeout(() => navigate('/home'), 600);
-    } catch {
-      setError('Passkey sign-in could not complete. You can try again.');
+      window.setTimeout(() => navigate('/home'), 900);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Passkey sign-in could not complete.';
+      // User-cancelled errors get a friendly retry prompt
+      if (msg.toLowerCase().includes('cancel')) {
+        setError('Passkey prompt was dismissed. Tap the button to try again.');
+      } else if (msg.toLowerCase().includes('security') || msg.toLowerCase().includes('support')) {
+        setError(msg);
+      } else {
+        setError('Passkey sign-in could not complete. You can try again.');
+      }
     } finally {
       setBusy(false);
     }
@@ -55,10 +66,23 @@ export function SignInPage() {
         </div>
 
         <div className="auth-badge-row">
-          <ModeBadge
-            mode={integrationConfig.passkeyMode}
-            label={`PASSKEY · ${integrationConfig.passkeyMode.toUpperCase()}`}
-          />
+          {nativeSupported ? (
+            <span
+              className="mode-badge mode-badge--testnet"
+              title="Your browser supports real WebAuthn passkeys"
+            >
+              <span className="mode-dot" />
+              WEBAUTHN · SUPPORTED
+            </span>
+          ) : (
+            <span
+              className="mode-badge mode-badge--demo"
+              title="WebAuthn not available — a simulated passkey session will be created"
+            >
+              <span className="mode-dot" />
+              WEBAUTHN · SIMULATED
+            </span>
+          )}
         </div>
 
         <h1 id="signin-heading">Your bill, in view.</h1>
@@ -88,7 +112,11 @@ export function SignInPage() {
             >
               <Fingerprint size={19} />
             </motion.span>
-            {busy ? 'Authenticating passkey…' : connected ? 'Passkey Verified ✓' : 'Continue with passkey'}
+            {busy
+              ? 'Authenticating passkey\u2026'
+              : connected
+              ? 'Passkey Verified \u2713'
+              : 'Continue with passkey'}
           </Button>
         </motion.div>
 
@@ -106,21 +134,48 @@ export function SignInPage() {
           )}
 
           {connected && (
-            <motion.p
-              className="success-note"
+            <motion.div
               role="status"
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
+              className="passkey-result-card"
             >
-              <ShieldCheck size={16} /> Passkey connected for this demo. Redirecting to Home…
-            </motion.p>
+              {authMethod === 'passkey' ? (
+                <p className="success-note">
+                  <ShieldCheck size={16} />
+                  <strong>Real WebAuthn passkey verified.</strong> Your hardware authenticator
+                  confirmed your identity.
+                </p>
+              ) : (
+                <p className="success-note" style={{ color: 'var(--amber)' }}>
+                  <AlertTriangle size={16} />
+                  <strong>Simulated passkey session.</strong> No hardware authenticator was used
+                  &mdash; this is a demo credential.
+                </p>
+              )}
+
+              {/* Scope clarification: passkeys authenticate the user, not the payment */}
+              <p className="passkey-scope-note">
+                <Info size={12} />
+                Passkeys confirm <em>your identity</em> as the payer. They do not verify the
+                merchant, invoice, or payment amount &mdash; that is Guardian&apos;s job.
+              </p>
+
+              {/* PRF vault transparency */}
+              <p className="passkey-scope-note" style={{ marginTop: 6, opacity: 0.8 }}>
+                <Info size={12} />
+                {authMethod === 'passkey'
+                  ? 'If your authenticator supports the PRF extension, receipt details will be encrypted with a hardware-derived key (shown on the receipt page).'
+                  : 'Receipt encryption uses a fallback software key \u2014 not hardware-bound PRF. The receipt page will label this clearly.'}
+              </p>
+            </motion.div>
           )}
         </AnimatePresence>
 
         <div className="auth-foot">
           <StatusRail compact />
           <span style={{ display: 'block', marginTop: 12, opacity: 0.75 }}>
-            Monad Testnet · Demo token · No real money
+            Monad Testnet &middot; Demo token &middot; No real money
           </span>
         </div>
       </motion.section>

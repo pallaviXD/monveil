@@ -3,7 +3,7 @@ export type Scenario = 'honest' | 'tampered' | 'replay' | 'over-limit' | 'expire
 export type Verdict = 'safe' | 'review' | 'blocked';
 export type CheckStatus = 'pass' | 'blocked' | 'review';
 export type IntegrityStatus = 'pass' | 'review' | 'unavailable';
-export type PaymentStatus = 'pending' | 'submitted' | 'confirmed' | 'failed';
+export type PaymentStatus = 'pending' | 'submitted' | 'confirmed' | 'rejected' | 'failed';
 export type Mode = 'demo' | 'testnet' | 'live';
 
 export interface BillItem {
@@ -70,10 +70,29 @@ export interface PaymentReceipt {
   status: PaymentStatus;
   submittedAt: number;
   confirmedAt?: number;
+  /**
+   * true  → no wallet was connected; no tokens were moved; all data is locally generated.
+   * false → a wallet signed and broadcast a real transaction to Monad Testnet.
+   * undefined → status still pending / unknown (in-flight).
+   *
+   * IMPORTANT: Never render a simulated receipt as if it were an on-chain transaction.
+   */
+  isSimulated?: boolean;
+  /** Real 66-char 0x…hex transaction hash from the chain. Only present when isSimulated=false. */
+  txHash?: string;
+  /** Working Monad Testnet explorer URL. Only present when isSimulated=false and txHash is set. */
+  explorerUrl?: string;
+  /** Human-readable network label. */
+  networkLabel?: string;
+  /** Address of the registry contract that recorded the receipt. */
+  registryContract?: string;
   simulatedProofId?: string;
   simulatedProofUrl?: string;
+  /** @deprecated use txHash + explorerUrl instead */
   detailHash?: string;
+  /** @deprecated use registryContract instead */
   detailContract?: string;
+  /** @deprecated use networkLabel instead */
   detailNetwork?: string;
   encryptedDetailsCiphertext?: string;
   prfKeyFingerprint?: string;

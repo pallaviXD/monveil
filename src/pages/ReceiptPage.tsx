@@ -1,22 +1,147 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowUpRight, Check, CheckCircle2, Copy, Share2, XCircle, KeyRound, ExternalLink } from 'lucide-react';
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  Check,
+  CheckCircle2,
+  Clock,
+  Copy,
+  ExternalLink,
+  KeyRound,
+  Share2,
+  ShieldOff,
+  AlertTriangle,
+  XCircle,
+  Zap,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { useDemo } from '../app/DemoContext';
-import { Button, EmptyState, ModeBadge, Surface } from '../components/ui';
+import { Button, EmptyState, Surface } from '../components/ui';
 import { formatINR } from '../domain/money';
 import { paiseToAusdMicroUnits, formatAusdAmount } from '../contracts/ausd';
 import { PageHeading } from './shared';
+
+/**
+ * Settlement mode banner — the authoritative label for every receipt.
+ *
+ * Strict rendering contract:
+ *  isSimulated = true        → "Simulated receipt". Never implies any tx occurred.
+ *  isSimulated = false       → "Real on-chain transaction" with tx hash + explorer link.
+ *                              If status = 'rejected', show the rejection state clearly.
+ *  isSimulated = undefined   → Transaction is still in-flight; show pending state.
+ */
+function SettlementModeBanner({
+  isSimulated,
+  txHash,
+  explorerUrl,
+  status,
+}: {
+  isSimulated?: boolean;
+  txHash?: string;
+  explorerUrl?: string;
+  status: string;
+}) {
+  // Still in-flight (before payBill resolves)
+  if (isSimulated === undefined) {
+    return (
+      <div className="settlement-mode-banner settlement-mode-banner--pending">
+        <Clock size={14} />
+        <span>
+          <strong>Transaction in progress</strong> — waiting for Monad Testnet response.
+        </span>
+      </div>
+    );
+  }
+
+  // Real on-chain path — wallet was connected
+  if (!isSimulated) {
+    if (status === 'rejected') {
+      return (
+        <div className="settlement-mode-banner settlement-mode-banner--rejected">
+          <ShieldOff size={14} />
+          <span>
+            <strong>Transaction rejected on-chain</strong> — the contract reverted on Monad Testnet
+            (Chain&nbsp;ID&nbsp;10143). No tokens were transferred.
+            {txHash && (
+              <>
+                {' '}Tx:{' '}
+                <code className="font-mono">
+                  {txHash.slice(0, 12)}…{txHash.slice(-8)}
+                </code>
+              </>
+            )}
+            {explorerUrl && (
+              <>
+                {' '}—{' '}
+                <a href={explorerUrl} target="_blank" rel="noopener noreferrer" className="inline-link">
+                  View on Monad Explorer <ExternalLink size={11} style={{ verticalAlign: '-1px' }} />
+                </a>
+              </>
+            )}
+          </span>
+        </div>
+      );
+    }
+
+    if (txHash) {
+      return (
+        <div className="settlement-mode-banner settlement-mode-banner--live">
+          <Zap size={14} />
+          <span>
+            <strong>Real on-chain transaction</strong> — submitted to Monad Testnet (Chain&nbsp;ID&nbsp;10143).{' '}
+            Tx:{' '}
+            <code className="font-mono">
+              {txHash.slice(0, 12)}…{txHash.slice(-8)}
+            </code>
+            {explorerUrl && (
+              <>
+                {' '}—{' '}
+                <a href={explorerUrl} target="_blank" rel="noopener noreferrer" className="inline-link">
+                  View on Monad Explorer <ExternalLink size={11} style={{ verticalAlign: '-1px' }} />
+                </a>
+              </>
+            )}
+          </span>
+        </div>
+      );
+    }
+
+    // Submitted but hash not yet resolved
+    return (
+      <div className="settlement-mode-banner settlement-mode-banner--pending">
+        <Clock size={14} />
+        <span>
+          <strong>Transaction submitted to Monad Testnet</strong> — awaiting mining confirmation.
+        </span>
+      </div>
+    );
+  }
+
+  // isSimulated = true — must be explicit, never claim a tx occurred
+  return (
+    <div className="settlement-mode-banner settlement-mode-banner--simulated">
+      <AlertTriangle size={14} />
+      <span>
+        <strong>Simulated receipt — no transaction was broadcast.</strong> No wallet was connected
+        and no tokens were moved. Connect an EVM wallet on Monad Testnet to submit a real
+        transaction.
+      </span>
+    </div>
+  );
+}
 
 export function ReceiptPage() {
   const { receipt, notify } = useDemo();
   const [sharing, setSharing] = useState(false);
 
   const confirmed = receipt?.status === 'confirmed';
+  const isRejected = receipt?.status === 'rejected';
 
   useEffect(() => {
-    if (confirmed) {
+    if (confirmed && receipt?.isSimulated === true) {
+      // Confetti for simulated demo completions
       try {
         confetti({
           particleCount: 60,
@@ -27,8 +152,20 @@ export function ReceiptPage() {
       } catch {
         // Safe fallback if canvas is restricted
       }
+    } else if (confirmed && receipt?.isSimulated === false) {
+      // Real on-chain confirmed — bigger celebration
+      try {
+        confetti({
+          particleCount: 120,
+          spread: 90,
+          origin: { y: 0.6 },
+          colors: ['#3DDC97', '#A78BFA', '#FFD700', '#F4EFE6'],
+        });
+      } catch {
+        // noop
+      }
     }
-  }, [confirmed]);
+  }, [confirmed, receipt?.isSimulated]);
 
   if (!receipt) {
     return (
@@ -67,38 +204,72 @@ export function ReceiptPage() {
     }
   };
 
-  const proofId = receipt.simulatedProofId ?? `proof-${receipt.bill.id.toLowerCase()}`;
-  const isLiveExplorerUrl = receipt.simulatedProofUrl?.startsWith('http');
   const ausdDisplay = formatAusdAmount(paiseToAusdMicroUnits(receipt.bill.amountPaise));
+
+  // Prefer the new explicit fields; fall back to deprecated ones for backward-compat
+  const displayTxHash = receipt.txHash ?? (
+    typeof receipt.detailHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(receipt.detailHash)
+      ? receipt.detailHash
+      : undefined
+  );
+  const displayExplorerUrl = receipt.explorerUrl ?? (
+    receipt.simulatedProofUrl?.startsWith('http') ? receipt.simulatedProofUrl : undefined
+  );
+  const displayNetwork = receipt.networkLabel ?? receipt.detailNetwork ?? 'Monad Testnet (10143)';
+  const displayContract = receipt.registryContract ?? receipt.detailContract ?? '0x8a82a7314fbf17a590420B8d7De3044ab21f633B';
+
+  const pageTitle =
+    confirmed
+      ? receipt.isSimulated
+        ? 'Simulated demo record.'
+        : 'A clear, immutable record.'
+      : isRejected
+      ? 'Transaction rejected on-chain.'
+      : receipt.status === 'failed'
+      ? 'Payment halted by Guardian.'
+      : 'Payment in progress…';
 
   return (
     <div className="content-wrap">
       <PageHeading
         eyebrow="TRANSACTION RECEIPT · MONAD TESTNET"
-        title={
-          confirmed
-            ? 'A clear, immutable record.'
-            : receipt.status === 'failed'
-            ? 'Payment halted by Guardian.'
-            : 'Payment in progress…'
+        title={pageTitle}
+        description={
+          receipt.isSimulated
+            ? 'This is a simulated demo receipt. No real transaction occurred.'
+            : 'This receipt records the cryptographic bill signature and on-chain settlement outcome.'
         }
-        description="This verified receipt records the cryptographic bill signature and settlement outcome."
-        action={<ModeBadge mode={isLiveExplorerUrl ? 'testnet' : 'demo'} label={isLiveExplorerUrl ? 'MONAD TESTNET' : 'SIMULATED TESTNET'} />}
+      />
+
+      {/* Always show the banner — it's the primary honesty signal */}
+      <SettlementModeBanner
+        isSimulated={receipt.isSimulated}
+        txHash={displayTxHash}
+        explorerUrl={displayExplorerUrl}
+        status={receipt.status}
       />
 
       <div className="receipt-layout">
         <motion.article
           className="receipt-paper receipt-paper-large"
-          aria-label="MONVEIL demo receipt"
+          aria-label="MONVEIL receipt"
           initial={{ opacity: 0, y: 20, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ type: 'spring', stiffness: 120, damping: 18 }}
         >
-          {confirmed && (
+          {confirmed && !isRejected && (
             <div className="receipt-stamp">
               <span>
-                PAID<br />
-                ON MONAD
+                {receipt.isSimulated ? 'DEMO\nSIM' : 'PAID\nON MONAD'}
+              </span>
+            </div>
+          )}
+          {isRejected && (
+            <div className="receipt-stamp receipt-stamp--failed">
+              <span>
+                <ShieldOff size={18} />
+                <br />
+                REJECTED
               </span>
             </div>
           )}
@@ -115,7 +286,11 @@ export function ReceiptPage() {
           <div className="receipt-brand">
             <div>
               <strong>MONVEIL</strong>
-              <small>SAFE-PAY RECEIPT · MONAD TESTNET</small>
+              <small>
+                {receipt.isSimulated
+                  ? 'SIMULATED DEMO RECEIPT · NOT ON-CHAIN'
+                  : 'SAFE-PAY RECEIPT · MONAD TESTNET'}
+              </small>
             </div>
             <span className="signed-stamp">
               <CheckCircle2 size={13} />
@@ -141,13 +316,27 @@ export function ReceiptPage() {
               <strong>{ausdDisplay}</strong>
             </div>
             <div className="receipt-total-row">
-              <span>Settlement Status</span>
-              <strong className={confirmed ? 'green' : receipt.status === 'failed' ? 'red' : 'amber'}>
-                {receipt.status === 'confirmed' ? 'CONFIRMED ✓' : receipt.status.toUpperCase()}
+              <span>Settlement type</span>
+              <strong style={{ color: receipt.isSimulated ? 'var(--amber)' : 'var(--green)' }}>
+                {receipt.isSimulated ? 'SIMULATED (no tx)' : 'ON-CHAIN (Monad Testnet)'}
               </strong>
             </div>
             <div className="receipt-total-row">
-              <span>Recorded timestamp</span>
+              <span>Status</span>
+              <strong
+                className={
+                  confirmed ? 'green' : isRejected ? 'red' : receipt.status === 'failed' ? 'red' : 'amber'
+                }
+              >
+                {receipt.status === 'confirmed'
+                  ? 'CONFIRMED ✓'
+                  : receipt.status === 'rejected'
+                  ? 'REJECTED ✕'
+                  : receipt.status.toUpperCase()}
+              </strong>
+            </div>
+            <div className="receipt-total-row">
+              <span>Recorded at</span>
               <strong>
                 {new Date(receipt.confirmedAt ?? receipt.submittedAt).toLocaleString('en-IN', {
                   dateStyle: 'medium',
@@ -157,24 +346,44 @@ export function ReceiptPage() {
             </div>
             {receipt.prfKeyFingerprint && (
               <div className="receipt-total-row" style={{ fontSize: '0.8rem', opacity: 0.85 }}>
-                <span><KeyRound size={11} style={{ verticalAlign: '-1px', marginRight: 4 }} />Mera PRF Vault</span>
+                <span>
+                  <KeyRound size={11} style={{ verticalAlign: '-1px', marginRight: 4 }} />
+                  Mera PRF Vault
+                </span>
                 <span className="font-mono">Encrypted (Key {receipt.prfKeyFingerprint})</span>
               </div>
             )}
           </div>
 
           <div className="receipt-footer">
-            MONAD TESTNET · CHAIN ID 10143 · AGORA AUSD & MON · VERIFICATION REGISTRY
+            MONAD TESTNET · CHAIN ID 10143 · AGORA AUSD &amp; MON · VERIFICATION REGISTRY
           </div>
 
           <details className="details-accordion">
             <summary>
-              Details <span>Cryptographic seal · Contract · Network</span>
+              Technical details{' '}
+              <span>
+                {receipt.isSimulated
+                  ? 'Simulated IDs · No real tx'
+                  : 'Tx hash · Contract · Network'}
+              </span>
             </summary>
             <div className="receipt-details">
-              <span>Transaction / Report: {receipt.detailHash ?? receipt.id}</span>
-              <span>Registry contract: {receipt.detailContract ?? '0x4a6b58611F36928e18FDAb821cEa7fE195F483c7'}</span>
-              <span>Network: {receipt.detailNetwork ?? 'Monad Testnet (10143)'}</span>
+              {receipt.isSimulated ? (
+                <>
+                  <span>
+                    <strong>⚠ No real transaction hash.</strong> This receipt is a local simulation
+                    — no transaction was broadcast to any chain.
+                  </span>
+                  <span>Proof ID (simulation): {receipt.simulatedProofId ?? receipt.id}</span>
+                </>
+              ) : (
+                <>
+                  <span>Tx hash: {displayTxHash ?? '(awaiting confirmation)'}</span>
+                  <span>Registry contract: {displayContract}</span>
+                </>
+              )}
+              <span>Network: {displayNetwork}</span>
             </div>
           </details>
         </motion.article>
@@ -183,38 +392,57 @@ export function ReceiptPage() {
           <div className="receipt-statusline">
             {confirmed ? (
               <>
-                <Check size={16} /> Settlement recorded on Monad Testnet
+                <Check size={16} />{' '}
+                {receipt.isSimulated
+                  ? 'Demo simulation complete — not an on-chain record'
+                  : 'Settlement recorded on Monad Testnet'}
+              </>
+            ) : isRejected ? (
+              <>
+                <ShieldOff size={16} /> Transaction rejected — contract reverted on-chain
               </>
             ) : receipt.status === 'failed' ? (
               <>
-                <XCircle size={16} /> No payment was broadcasted
+                <XCircle size={16} /> No payment was broadcast
               </>
             ) : (
               <>
                 <span className="status-pulse" />{' '}
-                {receipt.status === 'pending' ? 'Pending transaction…' : 'Submitted'}
+                {receipt.status === 'pending' ? 'Pending…' : 'Submitted — awaiting confirmation'}
               </>
             )}
           </div>
+
           <p className="section-subtitle" style={{ marginTop: 8 }}>
-            {confirmed
+            {confirmed && receipt.isSimulated
+              ? 'This is a local Guardian demo result. No tokens were moved. Connect an EVM wallet to submit a real transaction.'
+              : confirmed
               ? 'The cryptographically signed bill and verification report hash are preserved on Monad Testnet.'
+              : isRejected
+              ? 'The transaction was mined but the contract reverted. No tokens were transferred. Check the explorer for details.'
               : receipt.status === 'failed'
               ? 'Guardian prevented settlement execution. No tokens were moved.'
               : 'Preparing settlement verification.'}
           </p>
 
           <div className="receipt-actions">
-            {confirmed && receipt.simulatedProofUrl && (
+            {(confirmed || isRejected) && displayExplorerUrl && !receipt.isSimulated && (
               <a
-                id={proofId}
+                className="button button--secondary"
+                href={displayExplorerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLink size={15} /> Monad Explorer
+              </a>
+            )}
+            {confirmed && receipt.isSimulated && receipt.simulatedProofUrl && (
+              <a
+                id={receipt.simulatedProofId ?? `proof-${receipt.bill.id.toLowerCase()}`}
                 className="button button--secondary"
                 href={receipt.simulatedProofUrl}
-                target={isLiveExplorerUrl ? '_blank' : undefined}
-                rel={isLiveExplorerUrl ? 'noopener noreferrer' : undefined}
               >
-                {isLiveExplorerUrl ? <ExternalLink size={15} /> : <ArrowUpRight size={15} />}
-                {isLiveExplorerUrl ? 'Monad Explorer' : 'Simulated Proof'}
+                <ArrowUpRight size={15} /> Simulated Proof
               </a>
             )}
             {confirmed && (
@@ -223,7 +451,10 @@ export function ReceiptPage() {
                 {sharing ? 'Sharing…' : 'Share Receipt'}
               </Button>
             )}
-            <Link className={`button ${confirmed ? 'button--primary' : 'button--secondary'}`} to="/home">
+            <Link
+              className={`button ${confirmed ? 'button--primary' : 'button--secondary'}`}
+              to="/home"
+            >
               Done <ArrowLeft size={14} style={{ transform: 'rotate(180deg)' }} />
             </Link>
           </div>
@@ -231,7 +462,9 @@ export function ReceiptPage() {
           {confirmed && (
             <p className="tiny" style={{ margin: '14px 0 0', display: 'flex', alignItems: 'center', gap: 5 }}>
               <Copy size={12} />
-              {isLiveExplorerUrl ? 'Verified transaction recorded on Monad testnet.' : 'Proof link preserved for demonstration.'}
+              {receipt.isSimulated
+                ? 'Demo receipt — simulated record, not on-chain.'
+                : 'Verified transaction recorded on Monad testnet.'}
             </p>
           )}
         </Surface>
