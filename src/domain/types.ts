@@ -75,6 +75,8 @@ export interface PaymentReceipt {
   detailHash?: string;
   detailContract?: string;
   detailNetwork?: string;
+  encryptedDetailsCiphertext?: string;
+  prfKeyFingerprint?: string;
 }
 
 export interface ServiceError extends Error {

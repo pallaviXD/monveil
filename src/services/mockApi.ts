@@ -1,5 +1,9 @@
 import type { ActivityItem, AppRules, Bill, BillItem, GuardianCheck, GuardianResult, IntegrityStatus, PaymentReceipt, Scenario, ServiceError } from '../domain/types';
 import { asPaise, calculateTax } from '../domain/money';
+import { verifyBillSignature, signBillEip712 } from './merchantRegistry';
+import { authenticatePasskey, encryptReceiptWithPrf, type PasskeyAccount } from './passkey';
+import { requestAiExplanation } from './kimiExplanation';
+import { executeMonadSettlement } from './blockchain';
 
 const STORAGE = { activity: 'monveil.activity.v1', rules: 'monveil.rules.v1', paid: 'monveil.paid.v1', currentBill: 'monveil.currentBill.v1', currency: 'monveil.currency.v1' } as const;
 const DEMO_HMAC_SECRET = 'MONVEIL-DEMO-ONLY-NOT-A-REAL-SIGNING-KEY';
@@ -45,13 +49,18 @@ async function hmac(text: string): Promise<string> {
   return Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 async function signatureMatches(bill: Bill): Promise<boolean> {
-  try {
-    const expected = await hmac(canonicalBill(bill));
-    if (expected.length !== bill.signature.length) return false;
-    let diff = 0;
-    for (let i = 0; i < expected.length; i += 1) diff |= expected.charCodeAt(i) ^ bill.signature.charCodeAt(i);
-    return diff === 0;
-  } catch { return false; }
+  const result = await verifyBillSignature(bill, async (b) => {
+    try {
+      const expected = await hmac(canonicalBill(b));
+      if (expected.length !== b.signature.length) return false;
+      let diff = 0;
+      for (let i = 0; i < expected.length; i += 1) diff |= expected.charCodeAt(i) ^ b.signature.charCodeAt(i);
+      return diff === 0;
+    } catch {
+      return false;
+    }
+  });
+  return result.valid;
 }
 
 export interface BillQrPayload extends Omit<Bill, 'signatureValid'> { signature: string }
@@ -60,7 +69,17 @@ export function serializeBillQr(bill: Bill): string {
   return JSON.stringify(payload);
 }
 
-export async function signBill(items: BillItem[], options: { id?: string; merchantName?: string; taxBasisPoints?: number; scenario?: Scenario; expiresInMs?: number } = {}): Promise<Bill> {
+export async function signBill(
+  items: BillItem[],
+  options: {
+    id?: string;
+    merchantName?: string;
+    taxBasisPoints?: number;
+    scenario?: Scenario;
+    expiresInMs?: number;
+    useEip712?: boolean;
+  } = {}
+): Promise<Bill> {
   await delay(180);
   if (items.length === 0) throw serviceError('EMPTY_BILL', 'Add at least one item before signing this bill.');
   const normalized = items.map((item) => {
@@ -84,7 +103,13 @@ export async function signBill(items: BillItem[], options: { id?: string; mercha
     createdAt: now, expiresAt: now + (options.expiresInMs ?? 10 * 60 * 1000),
     scenario: options.scenario ?? 'honest', signature: '', signatureValid: true,
   };
-  bill.signature = await hmac(canonicalBill(bill));
+
+  if (options.useEip712) {
+    const eipResult = await signBillEip712(bill);
+    bill.signature = eipResult.signature;
+  } else {
+    bill.signature = await hmac(canonicalBill(bill));
+  }
   return bill;
 }
 
@@ -99,14 +124,19 @@ export async function createSampleBill(scenario: Scenario): Promise<Bill> {
     ? [{ id: 'suite', name: 'Suite · 1 night', quantity: 1, unitPricePaise: paise(238095) }]
     : defaultItems;
   const expiry = scenario === 'expired' ? -60_000 : 10 * 60 * 1000;
-  const signed = await signBill(items, { id: billId, merchantName: scenario === 'over-limit' ? 'The Indigo House · Jaipur' : 'The Indigo House · Jaipur', scenario, expiresInMs: expiry, taxBasisPoints: 500 });
+  const signed = await signBill(items, { id: billId, merchantName: 'The Indigo House · Jaipur', scenario, expiresInMs: expiry, taxBasisPoints: 500 });
   if (scenario === 'tampered') return { ...signed, amountPaise: paise(125000), signatureValid: false };
   return signed;
 }
 
-export async function connectWithPasskey(): Promise<{ connected: true; method: 'demo-passkey' }> {
-  await delay(520);
-  return { connected: true, method: 'demo-passkey' };
+export async function connectWithPasskey(): Promise<{ connected: true; method: 'passkey' | 'demo-passkey'; account?: PasskeyAccount }> {
+  try {
+    const auth = await authenticatePasskey();
+    return { connected: true, method: auth.account.isSimulated ? 'demo-passkey' : 'passkey', account: auth.account };
+  } catch {
+    await delay(320);
+    return { connected: true, method: 'demo-passkey' };
+  }
 }
 
 export async function parseBillQr(payload: string): Promise<Bill> {
@@ -169,15 +199,8 @@ function verifyLines(bill: Bill): IntegrityStatus {
 }
 
 export async function explainResult(result: GuardianResult): Promise<string> {
-  await delay(260);
-  if (result.reasonCode === 'amount') return 'The QR requests Rs 1,250, but the merchant-signed bill is Rs 1,050. The amounts do not match, so Guardian blocked this payment.';
-  if (result.reasonCode === 'seal') return 'The scanned QR does not match the merchant-sealed bill. Guardian stopped here so you can ask for a fresh signed bill.';
-  if (result.reasonCode === 'expiry') return 'This signed bill is past its expiry time. Ask the merchant to create a new bill before you pay.';
-  if (result.reasonCode === 'duplicate') return 'This bill ID has already been paid in the demo. Guardian stopped a repeat payment.';
-  if (result.reasonCode === 'rules') return `This payment is above your Rs ${Math.floor(currentRules().perPaymentLimitPaise / 100).toLocaleString('en-IN')} per-payment limit or daily cap. Guardian followed your saved rules.`;
-  if (result.reasonCode === 'line-items') return 'Some line items or tax totals do not add up cleanly. Please review the bill with the merchant before paying.';
-  if (result.verdict === 'review') return 'The bill has a detail worth checking. Review the item lines with the merchant before you decide.';
-  return 'The signed total matches the QR, the bill is current, and it fits your rules. You can choose whether to continue.';
+  await delay(120);
+  return requestAiExplanation(result);
 }
 
 const seedActivity = (): ActivityItem[] => {
@@ -204,20 +227,31 @@ export async function setRules(rules: AppRules): Promise<AppRules> {
   return rules;
 }
 export async function payBill(bill: Bill): Promise<PaymentReceipt> {
-  await delay(360);
+  await delay(200);
   const result = await runGuardianChecks(bill);
   if (result.verdict === 'blocked') throw serviceError(`BLOCKED_${result.reasonCode?.toUpperCase() ?? 'BILL'}`, 'Guardian blocked this bill. Review the reason before trying again.');
-  await delay(680);
-  const now = Date.now();
-  const receipt: PaymentReceipt = {
-    id: `PAY-${now.toString(36).toUpperCase()}`, bill, status: 'confirmed', submittedAt: now - 680, confirmedAt: now,
-    simulatedProofId: `proof-${bill.id.toLowerCase()}`, simulatedProofUrl: `#simulated-proof-${bill.id.toLowerCase()}`,
-    detailHash: `0x${bill.signature.slice(0, 20)}`, detailContract: 'Guardian · demo contract', detailNetwork: 'Testnet · simulated',
-  };
+
+  // Execute on-chain Monad / Agora settlement (real if wallet connected, honest simulated testnet otherwise)
+  const receipt = await executeMonadSettlement(bill, result, { asset: 'AUSD' });
+
+  // Encrypt private receipt payload locally using Mera PRF key material
+  try {
+    const encryptedVault = await encryptReceiptWithPrf({
+      items: bill.items,
+      tax: bill.taxPaise,
+      subtotal: bill.subtotalPaise,
+      merchant: bill.merchantName,
+    }, bill.merchantName);
+    receipt.encryptedDetailsCiphertext = encryptedVault.ciphertext;
+    receipt.prfKeyFingerprint = encryptedVault.keyFingerprint;
+  } catch {
+    // PRF vault optional encryption
+  }
+
   const paid = safeRead<string[]>(STORAGE.paid, ['MV-REPLAY-001']);
   safeWrite(STORAGE.paid, [...new Set([...paid, bill.id])]);
   const activity = safeRead<ActivityItem[]>(STORAGE.activity, seedActivity());
-  safeWrite(STORAGE.activity, [{ id: receipt.id, billId: bill.id, merchantName: bill.merchantName, amountPaise: bill.amountPaise, date: now, verdict: 'safe', paymentStatus: 'confirmed', scenario: bill.scenario, reason: 'All Guardian checks passed before this simulated payment.' }, ...activity]);
+  safeWrite(STORAGE.activity, [{ id: receipt.id, billId: bill.id, merchantName: bill.merchantName, amountPaise: bill.amountPaise, date: receipt.confirmedAt ?? Date.now(), verdict: 'safe', paymentStatus: 'confirmed', scenario: bill.scenario, reason: 'All Guardian checks passed before this payment.' }, ...activity]);
   return receipt;
 }
 

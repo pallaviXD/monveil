@@ -1,0 +1,17 @@
+# yaml-language-server: $schema=./node_modules/envio/evm.schema.json
+name: monveil-indexer
+description: Envio HyperIndex indexer for Monveil Safe-Pay verification and settlement on Monad Testnet
+
+networks:
+  - id: 10143 # Monad Testnet
+    rpc_config:
+      url: https://testnet-rpc.monad.xyz
+    start_block: 70742452
+    contracts:
+      - name: MonveilVerificationRegistry
+        address:
+          - 0x8a82a7314fbf17a590420B8d7De3044ab21f633B
+        handler: src/EventHandlers.ts
+        events:
+          - event: ReceiptRecorded(bytes32 indexed billIdHash, bytes32 indexed reportHash, address indexed payer, address merchant, uint8 resultCode, uint256 amountPaise, uint256 timestamp)
+          - event: PaymentSettled(bytes32 indexed billIdHash, address indexed payer, address indexed merchant, address settlementToken, uint256 tokenAmount, bytes32 reportHash, uint256 timestamp)

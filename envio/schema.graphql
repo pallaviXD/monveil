@@ -1,0 +1,34 @@
+type ReceiptRecord @entity {
+  id: ID! # billIdHash
+  billIdHash: String!
+  reportHash: String!
+  payer: String!
+  merchant: String!
+  resultCode: Int!
+  amountPaise: BigInt!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: String!
+}
+
+type PaymentSettlement @entity {
+  id: ID! # billIdHash-txHash
+  billIdHash: String!
+  payer: String!
+  merchant: String!
+  settlementToken: String!
+  tokenAmount: BigInt!
+  reportHash: String!
+  timestamp: BigInt!
+  blockNumber: BigInt!
+  transactionHash: String!
+}
+
+type VerificationSummary @entity {
+  id: ID! # merchant address
+  merchant: String!
+  totalReceipts: BigInt!
+  totalSafe: BigInt!
+  totalBlocked: BigInt!
+  totalVolumePaise: BigInt!
+}

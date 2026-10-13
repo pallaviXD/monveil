@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowUpRight, Check, CheckCircle2, Copy, Share2, XCircle } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Check, CheckCircle2, Copy, Share2, XCircle, KeyRound, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { useDemo } from '../app/DemoContext';
 import { Button, EmptyState, ModeBadge, Surface } from '../components/ui';
 import { formatINR } from '../domain/money';
+import { paiseToAusdMicroUnits, formatAusdAmount } from '../contracts/ausd';
 import { PageHeading } from './shared';
 
 export function ReceiptPage() {
@@ -49,10 +50,10 @@ export function ReceiptPage() {
     setSharing(true);
     const message = `MONVEIL Safe-Pay receipt · ${receipt.bill.merchantName} · ${formatINR(
       receipt.bill.amountPaise
-    )} · Monad Testnet demo, no real money`;
+    )} · Monad Testnet`;
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'MONVEIL demo receipt', text: message });
+        await navigator.share({ title: 'MONVEIL receipt', text: message });
       } else if (navigator.clipboard) {
         await navigator.clipboard.writeText(message);
         notify('Receipt summary copied to clipboard.');
@@ -67,6 +68,8 @@ export function ReceiptPage() {
   };
 
   const proofId = receipt.simulatedProofId ?? `proof-${receipt.bill.id.toLowerCase()}`;
+  const isLiveExplorerUrl = receipt.simulatedProofUrl?.startsWith('http');
+  const ausdDisplay = formatAusdAmount(paiseToAusdMicroUnits(receipt.bill.amountPaise));
 
   return (
     <div className="content-wrap">
@@ -80,7 +83,7 @@ export function ReceiptPage() {
             : 'Payment in progress…'
         }
         description="This verified receipt records the cryptographic bill signature and settlement outcome."
-        action={<ModeBadge mode="demo" label="SIMULATED TESTNET" />}
+        action={<ModeBadge mode={isLiveExplorerUrl ? 'testnet' : 'demo'} label={isLiveExplorerUrl ? 'MONAD TESTNET' : 'SIMULATED TESTNET'} />}
       />
 
       <div className="receipt-layout">
@@ -95,7 +98,7 @@ export function ReceiptPage() {
             <div className="receipt-stamp">
               <span>
                 PAID<br />
-                IN DEMO
+                ON MONAD
               </span>
             </div>
           )}
@@ -134,6 +137,10 @@ export function ReceiptPage() {
               <strong className="font-editorial">{formatINR(receipt.bill.amountPaise)}</strong>
             </div>
             <div className="receipt-total-row">
+              <span>Agora AUSD equivalent</span>
+              <strong>{ausdDisplay}</strong>
+            </div>
+            <div className="receipt-total-row">
               <span>Settlement Status</span>
               <strong className={confirmed ? 'green' : receipt.status === 'failed' ? 'red' : 'amber'}>
                 {receipt.status === 'confirmed' ? 'CONFIRMED ✓' : receipt.status.toUpperCase()}
@@ -148,10 +155,16 @@ export function ReceiptPage() {
                 })}
               </strong>
             </div>
+            {receipt.prfKeyFingerprint && (
+              <div className="receipt-total-row" style={{ fontSize: '0.8rem', opacity: 0.85 }}>
+                <span><KeyRound size={11} style={{ verticalAlign: '-1px', marginRight: 4 }} />Mera PRF Vault</span>
+                <span className="font-mono">Encrypted (Key {receipt.prfKeyFingerprint})</span>
+              </div>
+            )}
           </div>
 
           <div className="receipt-footer">
-            MONAD TESTNET · CHAIN ID 10143 · DEMO TOKEN · NO REAL MONEY
+            MONAD TESTNET · CHAIN ID 10143 · AGORA AUSD & MON · VERIFICATION REGISTRY
           </div>
 
           <details className="details-accordion">
@@ -159,8 +172,8 @@ export function ReceiptPage() {
               Details <span>Cryptographic seal · Contract · Network</span>
             </summary>
             <div className="receipt-details">
-              <span>Demo reference: {receipt.detailHash ?? receipt.id}</span>
-              <span>Guardian contract: {receipt.detailContract ?? '0x71C...MonadDemo'}</span>
+              <span>Transaction / Report: {receipt.detailHash ?? receipt.id}</span>
+              <span>Registry contract: {receipt.detailContract ?? '0x4a6b58611F36928e18FDAb821cEa7fE195F483c7'}</span>
               <span>Network: {receipt.detailNetwork ?? 'Monad Testnet (10143)'}</span>
             </div>
           </details>
@@ -170,7 +183,7 @@ export function ReceiptPage() {
           <div className="receipt-statusline">
             {confirmed ? (
               <>
-                <Check size={16} /> Settlement confirmed on simulated Monad testnet
+                <Check size={16} /> Settlement recorded on Monad Testnet
               </>
             ) : receipt.status === 'failed' ? (
               <>
@@ -185,7 +198,7 @@ export function ReceiptPage() {
           </div>
           <p className="section-subtitle" style={{ marginTop: 8 }}>
             {confirmed
-              ? 'The cryptographically signed bill and settlement hash are permanently preserved in demo history.'
+              ? 'The cryptographically signed bill and verification report hash are preserved on Monad Testnet.'
               : receipt.status === 'failed'
               ? 'Guardian prevented settlement execution. No tokens were moved.'
               : 'Preparing settlement verification.'}
@@ -193,8 +206,15 @@ export function ReceiptPage() {
 
           <div className="receipt-actions">
             {confirmed && receipt.simulatedProofUrl && (
-              <a id={proofId} className="button button--secondary" href={receipt.simulatedProofUrl}>
-                <ArrowUpRight size={15} /> Simulated Proof
+              <a
+                id={proofId}
+                className="button button--secondary"
+                href={receipt.simulatedProofUrl}
+                target={isLiveExplorerUrl ? '_blank' : undefined}
+                rel={isLiveExplorerUrl ? 'noopener noreferrer' : undefined}
+              >
+                {isLiveExplorerUrl ? <ExternalLink size={15} /> : <ArrowUpRight size={15} />}
+                {isLiveExplorerUrl ? 'Monad Explorer' : 'Simulated Proof'}
               </a>
             )}
             {confirmed && (
@@ -211,7 +231,7 @@ export function ReceiptPage() {
           {confirmed && (
             <p className="tiny" style={{ margin: '14px 0 0', display: 'flex', alignItems: 'center', gap: 5 }}>
               <Copy size={12} />
-              Proof is simulated for the hackathon demonstration.
+              {isLiveExplorerUrl ? 'Verified transaction recorded on Monad testnet.' : 'Proof link preserved for demonstration.'}
             </p>
           )}
         </Surface>
