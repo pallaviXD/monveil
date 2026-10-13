@@ -1,0 +1,171 @@
+/**
+ * MONVEIL Design System Tokens
+ * Art Direction: Cinematic fintech meets tactile stationery
+ */
+
+:root {
+  /* Canvas & Backgrounds */
+  --canvas-deep: #080718;
+  --canvas-base: #0B0B1E;
+  --canvas-elevated: #12102B;
+  --canvas-surface: #161533;
+  --canvas-surface-hover: #1D1B42;
+  --canvas-overlay: rgba(11, 11, 30, 0.85);
+
+  /* Violet & Lavender Brand Spectrum (derived from the ribbon logo) */
+  --violet-100: #F3EFFF;
+  --violet-200: #E4D9FF;
+  --violet-300: #D8CCFF;
+  --violet-400: #BEA4FF;
+  --violet-500: #A78BFA;
+  --violet-600: #8B5CF6;
+  --violet-700: #7C3AED;
+  --violet-800: #5B21B6;
+  --violet-glow: rgba(167, 139, 250, 0.28);
+  --violet-glow-intense: rgba(167, 139, 250, 0.55);
+
+  /* Stationery & Warm Paper */
+  --paper-bg: #F4EFE6;
+  --paper-warm: #EFE8DC;
+  --paper-border: rgba(30, 26, 42, 0.15);
+  --ink-primary: #1C1926;
+  --ink-secondary: #585363;
+  --ink-muted: #837D8D;
+  --ink-faint: #AAA4B2;
+
+  /* Verification Status Triad (always paired with icon and text) */
+  --status-safe: #3DDC97;
+  --status-safe-bg: rgba(61, 220, 151, 0.10);
+  --status-safe-border: rgba(61, 220, 151, 0.32);
+  --status-safe-glow: rgba(61, 220, 151, 0.35);
+
+  --status-review: #FFB020;
+  --status-review-bg: rgba(255, 176, 32, 0.10);
+  --status-review-border: rgba(255, 176, 32, 0.32);
+  --status-review-glow: rgba(255, 176, 32, 0.35);
+
+  --status-blocked: #FF5D5D;
+  --status-blocked-bg: rgba(255, 93, 93, 0.10);
+  --status-blocked-border: rgba(255, 93, 93, 0.32);
+  --status-blocked-glow: rgba(255, 93, 93, 0.35);
+
+  /* Borders & Dividers */
+  --border-subtle: rgba(222, 218, 255, 0.08);
+  --border-default: rgba(222, 218, 255, 0.14);
+  --border-hover: rgba(222, 218, 255, 0.28);
+  --border-accent: rgba(167, 139, 250, 0.45);
+
+  /* Typography */
+  --font-serif: 'Fraunces', Georgia, serif;
+  --font-sans: 'Inter Tight', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', monospace;
+
+  /* Elevation Shadows & Light Rims */
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.42);
+  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.55);
+  --shadow-paper: 0 24px 70px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.12);
+
+  /* Motion Easings */
+  --ease-silk: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-glide: cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: rgba(20, 19, 44, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-default);
+}
+
+.glass-panel-subtle {
+  background: rgba(18, 16, 38, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--border-subtle);
+}
+
+/* Perforated receipt edge */
+.perforated-edge-bottom {
+  position: relative;
+}
+.perforated-edge-bottom::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -8px;
+  height: 9px;
+  background: radial-gradient(circle at 6px 0, var(--canvas-base) 6px, transparent 6.5px) 0 0/14px 9px repeat-x;
+  pointer-events: none;
+}
+
+.perforated-edge-top {
+  position: relative;
+}
+.perforated-edge-top::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -8px;
+  height: 9px;
+  background: radial-gradient(circle at 6px 9px, transparent 6px, var(--paper-bg) 6.5px) 0 0/14px 9px repeat-x;
+  pointer-events: none;
+}
+
+/* Wax seal stamp stamp effect */
+.wax-stamp {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 2px dashed currentColor;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  box-shadow: inset 0 0 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Aurora background keyframes */
+@keyframes aurora-pulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: translate(-50%, -46%) scale(1.18);
+    opacity: 1;
+  }
+}
+
+@keyframes aurora-drift-1 {
+  0%, 100% {
+    transform: translate(-50%, -50%) translate(0, 0);
+  }
+  50% {
+    transform: translate(-50%, -50%) translate(40px, -35px) scale(1.12);
+  }
+}
+
+@keyframes aurora-drift-2 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-30px, 45px) scale(1.15);
+  }
+}
+
+.animate-aurora-pulse {
+  animation: aurora-pulse 10s ease-in-out infinite;
+}
+
+.animate-aurora-drift-1 {
+  animation: aurora-drift-1 14s ease-in-out infinite;
+}
+
+.animate-aurora-drift-2 {
+  animation: aurora-drift-2 12s ease-in-out infinite;
+}

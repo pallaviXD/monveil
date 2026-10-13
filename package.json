@@ -1,0 +1,41 @@
+{
+  "name": "monveil",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.12.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^4.5.2",
+    "canvas-confetti": "^1.9.4",
+    "framer-motion": "^12.23.12",
+    "jsqr": "^1.4.0",
+    "lucide-react": "^0.468.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.6.2",
+    "recharts": "^2.15.4",
+    "three": "^0.186.1",
+    "vite": "^6.3.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.8",
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.8",
+    "@types/three": "^0.186.0",
+    "jsdom": "^26.1.0",
+    "sharp": "^0.35.5",
+    "tailwindcss": "^4.1.8",
+    "typescript": "~5.8.3",
+    "viem": "^2.57.5",
+    "vitest": "^3.2.4"
+  }
+}
