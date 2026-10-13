@@ -1,0 +1,284 @@
+{
+  "project": {
+    "name": "MONVEIL Smoky Glass Background Loop",
+    "purpose": "Abstract ambient background loop for a dark fintech brand",
+    "duration_seconds": 15,
+    "fps": 24,
+    "frame_start": 1,
+    "frame_end": 360,
+    "resolution": {
+      "width": 1920,
+      "height": 1080
+    },
+    "aspect_ratio": "16:9",
+    "render_engine_final": "Cycles",
+    "render_engine_preview": "BLENDER_EEVEE_NEXT",
+    "color_management": {
+      "view_transform": "AgX",
+      "look": "Medium High Contrast"
+    },
+    "audio": false,
+    "output": {
+      "format": "FFMPEG",
+      "container": "MPEG4",
+      "codec": "H264",
+      "file_extension": ".mp4"
+    }
+  },
+  "palette": {
+    "background_midnight_navy": "#0B0B1E",
+    "deep_indigo": "#12102B",
+    "plum_navy": "#15142C",
+    "soft_violet": "#A78BFA",
+    "pale_lavender": "#D8CCFF",
+    "silver_lavender": "#A8A5BD",
+    "forbidden_colors": [
+      "gold",
+      "cyan",
+      "saturated blue",
+      "saturated magenta",
+      "strong red",
+      "bright neon"
+    ]
+  },
+  "composition": {
+    "camera": "locked perspective with optional imperceptible cyclic drift",
+    "object_region": "primarily right third and outer edges",
+    "left_text_safe_region": "left 50-60 percent remains dark and uncluttered",
+    "negative_space": "generous across center-left and left half",
+    "logo_reference_usage": "mood and material inspiration only; do not reproduce emblem, star, wordmark, slogan, symbol, or text"
+  },
+  "camera": {
+    "type": "PERSP",
+    "lens_mm": 75,
+    "location": [0.0, -11.0, 3.2],
+    "look_at": [0.7, 0.0, 2.8],
+    "dof": true,
+    "dof_fstop": 5.6,
+    "max_loop_translation": 0.02,
+    "max_loop_rotation_degrees": 0.15
+  },
+  "world": {
+    "color": "#0B0B1E",
+    "strength": 0.1,
+    "background_volume": {
+      "enabled": true,
+      "color": "#12102B",
+      "density": 0.008,
+      "anisotropy": 0.0,
+      "animation": "cyclic low-frequency noise"
+    }
+  },
+  "objects": [
+    {
+      "name": "Main_Rounded_Diamond",
+      "type": "beveled_octahedron_or_diamond",
+      "location": [2.4, 0.0, 3.0],
+      "scale": [1.0, 1.0, 1.0],
+      "material": "Smoked_Glass",
+      "animation": {
+        "rotation_degrees_total": [0, 25, 10],
+        "curve": "sine_cyclic"
+      }
+    },
+    {
+      "name": "Beveled_Cube_A",
+      "type": "cube_with_bevel",
+      "location": [3.9, 0.4, 2.2],
+      "dimensions": [1.2, 1.2, 1.2],
+      "bevel_width": 0.16,
+      "bevel_segments": 6,
+      "material": "Smoked_Glass",
+      "animation": {
+        "rotation_degrees_total": [3, -4, 2],
+        "curve": "sine_cyclic"
+      }
+    },
+    {
+      "name": "Beveled_Cube_B",
+      "type": "cube_with_bevel",
+      "location": [2.9, 0.8, 1.6],
+      "dimensions": [0.9, 0.9, 0.9],
+      "bevel_width": 0.13,
+      "bevel_segments": 6,
+      "material": "Smoked_Glass",
+      "animation": {
+        "rotation_degrees_total": [-4, 3, -2],
+        "curve": "sine_cyclic"
+      }
+    },
+    {
+      "name": "Glass_Sphere_A",
+      "type": "uv_sphere",
+      "location": [4.5, 0.1, 3.8],
+      "scale": [0.62, 0.62, 0.62],
+      "material": "Smoked_Glass",
+      "animation": {
+        "orbit_radius": 0.12,
+        "curve": "sine_cyclic"
+      }
+    },
+    {
+      "name": "Glass_Sphere_B",
+      "type": "ico_sphere",
+      "location": [2.0, 0.6, 1.3],
+      "scale": [0.42, 0.42, 0.42],
+      "material": "Smoked_Glass",
+      "animation": {
+        "orbit_radius": 0.1,
+        "curve": "sine_cyclic"
+      }
+    },
+    {
+      "name": "Curved_Glass_Ribbon",
+      "type": "bezier_curve_with_thin_bevel",
+      "control_points": [
+        [1.6, 0.3, 1.5],
+        [2.6, 0.1, 2.1],
+        [3.7, 0.2, 3.0],
+        [4.7, 0.2, 3.7]
+      ],
+      "bevel_depth": 0.055,
+      "material": "Smoked_Glass_Ribbon",
+      "animation": {
+        "drift_distance": 0.18,
+        "twist_degrees": 4,
+        "curve": "sine_cyclic"
+      }
+    },
+    {
+      "name": "Smoky_Wisp_Back",
+      "type": "low_density_volume",
+      "location": [3.3, 1.2, 2.7],
+      "scale": [3.0, 0.6, 1.8],
+      "material": "Indigo_Haze_Volume",
+      "animation": {
+        "noise": "cyclic",
+        "speed": 0.12,
+        "density_variation": 0.015
+      }
+    }
+  ],
+  "materials": {
+    "Smoked_Glass": {
+      "shader": "Principled BSDF",
+      "base_color": "#15142C",
+      "metallic": 0.0,
+      "roughness": 0.23,
+      "transmission_weight": 0.75,
+      "ior": 1.47,
+      "coat_weight": 0.15,
+      "coat_roughness": 0.16,
+      "alpha": 0.68,
+      "emission_color": "#A78BFA",
+      "emission_strength_max": 0.04,
+      "frosted_noise": {
+        "scale": 3.5,
+        "detail": 2.4,
+        "roughness_variation": 0.06
+      },
+      "edge_tint": {
+        "facing_color": "#D8CCFF",
+        "grazing_color": "#A78BFA",
+        "strength": 0.35
+      }
+    },
+    "Smoked_Glass_Ribbon": {
+      "inherits": "Smoked_Glass",
+      "roughness": 0.2,
+      "transmission_weight": 0.8,
+      "alpha": 0.58
+    },
+    "Indigo_Haze_Volume": {
+      "shader": "Principled Volume",
+      "color": "#12102B",
+      "density": 0.012,
+      "anisotropy": 0.0
+    },
+    "Background_Matte": {
+      "shader": "Principled BSDF",
+      "base_color": "#0B0B1E",
+      "roughness": 0.95,
+      "metallic": 0.0
+    }
+  },
+  "lights": [
+    {
+      "name": "Soft_Lavender_Key",
+      "type": "AREA",
+      "color": "#D8CCFF",
+      "energy": 120,
+      "size": 5.0,
+      "location": [4.0, -3.0, 7.0],
+      "animation": {
+        "position_drift": 0.18,
+        "curve": "sine_cyclic"
+      }
+    },
+    {
+      "name": "Violet_Rim",
+      "type": "AREA",
+      "color": "#A78BFA",
+      "energy": 55,
+      "size": 4.0,
+      "location": [5.0, 2.0, 4.0],
+      "animation": {
+        "position_drift": 0.12,
+        "curve": "sine_cyclic"
+      }
+    },
+    {
+      "name": "Silver_Lavender_Fill",
+      "type": "AREA",
+      "color": "#A8A5BD",
+      "energy": 18,
+      "size": 6.0,
+      "location": [-3.0, -2.0, 3.0],
+      "animation": {
+        "enabled": false
+      }
+    }
+  ],
+  "animation": {
+    "interpolation": "BEZIER",
+    "easing": "sine or ease-in-out",
+    "cyclic": true,
+    "loop_boundary": "frame 361 equals frame 1 state; export frames 1-360",
+    "motion_character": "slow, smooth, continuous, no sudden changes"
+  },
+  "compositor": {
+    "nodes": [
+      "Render Layers",
+      "Subtle Glare",
+      "Low Strength Color Balance",
+      "Corner Vignette",
+      "Composite"
+    ],
+    "glare": {
+      "type": "FOG_GLOW",
+      "threshold": 1.2,
+      "size": 6,
+      "mix": -0.85
+    },
+    "vignette": {
+      "strength": 0.12,
+      "falloff": "smooth"
+    },
+    "color_balance": {
+      "lift": "#0B0B1E",
+      "gamma": "#15142C",
+      "gain": "#D8CCFF"
+    }
+  },
+  "negative_constraints": [
+    "no people or human-like figures",
+    "no faces, hands, bodies, characters, or silhouettes",
+    "no story, narrative, product demonstration, or sequence of events",
+    "no bill, receipt, paper, phone, website, app, dashboard, UI, or interface",
+    "no text, letters, numbers, logos, symbols, wordmarks, watermarks, QR codes, or readable writing",
+    "no coins, cryptocurrency, blockchain, or financial iconography",
+    "no gold, cyan, saturated blue, saturated magenta, strong red, or bright neon",
+    "no solid-stone cubes, complex machinery, busy patterns, clutter, sparks, or excessive particles",
+    "no rapid rotation, sudden cuts, dramatic zooms, flashing, glitch effects, or harsh contrast"
+  ]
+}

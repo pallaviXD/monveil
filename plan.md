@@ -1,4 +1,4 @@
-# MONVEIL — approved implementation and design plan
+# MONVEIL - approved implementation and design plan
 
 ## Product and implementation
 

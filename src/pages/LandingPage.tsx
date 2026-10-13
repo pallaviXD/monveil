@@ -1,43 +1,328 @@
+import { lazy, Suspense, useState, useEffect } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowRight, ChevronRight, FileCheck2, LockKeyhole, ScanLine, ShieldCheck, Sparkles } from 'lucide-react';
+import {
+  ArrowRight, ChevronRight, ShieldCheck, ScanLine,
+  FileCheck2, Zap, Eye, Fingerprint
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { BrandLogo, ModeBadge, StatusRail } from '../components/ui';
+import { PaperBill } from '../components/primitives/PaperBill';
+import '../styles/landing.css';
 
-const flow = ['Request', 'Bill seal', 'Guardian checks', 'Your decision', 'Proof'];
+// Lazy-load the 3D Smoky-Glass background scene
+const SmokyGlassCanvas = lazy(() =>
+  import('../components/primitives/SmokyGlassCanvas').then(m => ({ default: m.SmokyGlassCanvas }))
+);
+
+const storySteps = [
+  {
+    num: '01',
+    title: 'Merchant signs the bill',
+    body: 'Before showing you a QR, the merchant creates and cryptographically signs a bill: items, total, expiry, their address. The signature seals the amount.',
+    tag: { label: 'EIP-712 signature', cls: 'violet' },
+  },
+  {
+    num: '02',
+    title: 'You scan. Guardian checks.',
+    body: 'MONVEIL reads the QR and verifies the seal, checks that the QR amount matches exactly what was signed, confirms it has not expired, and checks your own rules (per-payment limit, daily cap).',
+    tag: { label: 'On-device, before payment', cls: 'green' },
+  },
+  {
+    num: '03',
+    title: 'AI explains in one sentence',
+    body: 'Kimi gives you one calm sentence about the result. It never makes the decision. You see the exact numbers. You decide.',
+    tag: { label: 'AI explains only', cls: 'amber' },
+  },
+  {
+    num: '04',
+    title: 'You approve. Proof recorded.',
+    body: 'Only if every check passes do you see the "Hold to pay" button. Once confirmed, a PaymentSettled event is recorded on Monad testnet and indexed by Envio.',
+    tag: { label: 'On-chain proof', cls: 'violet' },
+  },
+];
+
+const bentoCards = [
+  {
+    icon: <ShieldCheck size={20} />,
+    title: 'Bill seal verification',
+    body: 'Every bill is EIP-712 signed by the merchant. Guardian verifies the signature client-side before you ever see a payment button.',
+    wide: false,
+  },
+  {
+    icon: <Eye size={20} />,
+    title: 'Amount tamper detection',
+    body: 'The QR amount is compared byte-for-byte with what the merchant signed. A Rs 1 difference blocks the payment.',
+    wide: false,
+  },
+  {
+    icon: <Zap size={20} />,
+    title: 'Your rules, always enforced',
+    body: 'Set a per-payment limit, a daily cap, or block specific merchants. Guardian checks your rules before every payment, silently, in milliseconds.',
+    wide: true,
+  },
+  {
+    icon: <Fingerprint size={20} />,
+    title: 'Passkey sign-in',
+    body: 'No seed phrase. No password. Sign in with your device biometrics via Mera passkeys.',
+    wide: false,
+  },
+  {
+    icon: <FileCheck2 size={20} />,
+    title: 'On-chain receipt',
+    body: 'Every confirmed payment is indexed by Envio HyperIndex on Monad testnet so you can always look up the proof.',
+    wide: false,
+  },
+];
+
+// Fade-up helper – returns inline initial/animate/transition props
+function fadeUp(i: number) {
+  return {
+    initial: { opacity: 0, y: 24 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.5, delay: i * 0.08, ease: 'easeOut' as const },
+  };
+}
 
 export function LandingPage() {
   const reduceMotion = useReducedMotion();
-  return <div className="landing">
-    <header className="landing-nav"><Link to="/" className="landing-logo" aria-label="MONVEIL"><BrandLogo size="normal" /></Link><div className="landing-nav-right"><StatusRail compact /><Link className="button button--ghost" to="/signin">Sign in <ChevronRight size={15} /></Link></div></header>
-    <section className="landing-hero">
-      <motion.div className="landing-copy" initial={reduceMotion ? false : { opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .55 }}>
-        <ModeBadge mode="demo" label="TESTNET DEMO · NO REAL MONEY" />
-        <h1>Know before<br />you <em>approve.</em></h1>
-        <p>See what a merchant signed. Let Guardian check the bill before you decide to pay.</p>
-        <div className="landing-cta-row"><Link className="button button--primary" to="/signin">Try the demo <ArrowRight size={17} /></Link><a className="button button--secondary" href="#how-it-works">See how it works</a></div>
-        <div className="landing-caption">No seed phrase. No real money. Just a clearer way to inspect a bill.</div>
-      </motion.div>
-      <motion.div className="hero-proof" initial={reduceMotion ? false : { opacity: 0, y: 18, rotate: 1 }} animate={{ opacity: 1, y: 0, rotate: 0 }} transition={{ type: 'spring', stiffness: 120, damping: 18, delay: .12 }}>
-        <div className="hero-glow" />
-        <div className="hero-paper">
-          <div className="hero-paper-head"><div><strong>The Indigo House</strong><div className="tiny" style={{ color: '#756E78', marginTop: 4 }}>Jaipur · Room 204</div></div><span>DEMO BILL<br />#MV-1042</span></div>
-          <div className="paper-line"><span>Garden room · 1 night</span><strong>Rs 910</strong></div><div className="paper-line"><span>Breakfast for two</span><strong>Rs 90</strong></div><div className="paper-line"><span>Tax · 5%</span><strong>Rs 50</strong></div>
-          <div className="paper-line paper-total"><span>Merchant signed</span><strong>Rs 1,050</strong></div>
-          <div className="paper-signed"><ShieldCheck size={15} /> Merchant signed · Bill seal present</div>
-          <div className="amount-compare"><div className="compare-row"><span>QR asks</span><strong>Rs 1,250</strong></div><div className="gap-bar"><span /></div><div className="gap-note">Rs 200 difference · payment blocked</div></div>
-          <motion.div className="hero-stamp" animate={reduceMotion ? undefined : { rotate: [11, 8, 11], scale: [1, 1.025, 1] }} transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}><div><ShieldCheck size={18} /><br />CHECKED<br />BEFORE PAY</div></motion.div>
+  const [tampered, setTampered] = useState(false);
+  const [webglOk, setWebglOk] = useState(true);
+
+  // Detect WebGL support
+  useEffect(() => {
+    try {
+      const canvas = document.createElement('canvas');
+      const ok = !!(canvas.getContext('webgl') || canvas.getContext('experimental-webgl'));
+      setWebglOk(ok);
+    } catch {
+      setWebglOk(false);
+    }
+  }, []);
+
+  const [hasVideo, setHasVideo] = useState(false);
+
+  useEffect(() => {
+    const v = document.createElement('video');
+    v.src = '/smoky-glass-loop.mp4';
+    v.onloadeddata = () => setHasVideo(true);
+    v.onerror = () => setHasVideo(false);
+  }, []);
+
+  return (
+    <div style={{ position: 'relative', background: 'var(--canvas-0)', minHeight: '100dvh', color: '#fff', overflowX: 'hidden' }}>
+
+      {/* ── Aurora / 3D Smoky-Glass background ─────────────────── */}
+      <div className="landing-aurora" aria-hidden="true">
+        {hasVideo ? (
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="landing-bg-video"
+            src="/smoky-glass-loop.mp4"
+          />
+        ) : webglOk ? (
+          <Suspense fallback={<div className="landing-aurora-fallback" />}>
+            <SmokyGlassCanvas />
+          </Suspense>
+        ) : (
+          <div className="landing-aurora-fallback" />
+        )}
+      </div>
+
+      {/* ── Testnet banner ──────────────────────────────────── */}
+      <div className="testnet-banner" role="status" aria-live="polite">
+        <ScanLine size={11} />
+        TESTNET DEMO &nbsp;·&nbsp; DEMO TOKEN &nbsp;·&nbsp; NO REAL MONEY
+      </div>
+
+      {/* ── Navbar ─────────────────────────────────────────── */}
+      <nav className="ln-nav" aria-label="Main navigation">
+        <Link to="/" className="ln-nav-logo" aria-label="MONVEIL home">
+          <BrandLogo size="normal" />
+        </Link>
+        <div className="ln-nav-right">
+          <StatusRail compact />
+          <Link className="button button--ghost" to="/signin">
+            Launch app <ChevronRight size={15} />
+          </Link>
         </div>
-      </motion.div>
-    </section>
-    <section id="how-it-works" className="flow-strip" aria-label="How MONVEIL works">{flow.map((step, i) => <div className="flow-wrap" key={step}><div className="flow-step"><b>{String(i + 1).padStart(2, '0')}</b><span>{step}</span></div>{i < flow.length - 1 && <span className="flow-arrow" />}</div>)}</section>
-    <section className="landing-section"><span className="eyebrow">A quieter kind of protection</span><h2>Inspect the bill.<br />Keep control of the decision.</h2><p>MONVEIL compares the QR amount to the merchant-signed bill, checks the expiry and your own limits, then explains the result in plain words. You decide what happens next.</p><div className="privacy-grid"><article className="privacy-card"><LockKeyhole size={19} /><h3>What stays off-chain</h3><p>Your bill details, item lines, merchant notes and the explanation stay in this demo experience. They are not placed on a public ledger.</p></article><article className="privacy-card"><FileCheck2 size={19} /><h3>Only the payment proof is simulated</h3><p>The mock receipt shows a simulated Proof reference only after the demo reaches confirmed. There is no real network connection or token transfer.</p></article></div></section>
-    <section className="landing-section" style={{ paddingTop: 16 }}><span className="eyebrow">Good to know</span><h2>Questions, answered plainly.</h2><div className="faq-list">
-      <details className="faq-item"><summary>Does this move real money? <ChevronRight size={16} /></summary><p>No. This is a testnet demo using a demo token. No real payment is sent, and no bank or UPI account is connected.</p></details>
-      <details className="faq-item"><summary>Does AI decide whether I can pay? <ChevronRight size={16} /></summary><p>No. Guardian checks the bill and your rules. AI only writes one plain-language explanation of the result.</p></details>
-      <details className="faq-item"><summary>What happens when an amount does not match? <ChevronRight size={16} /></summary><p>The signed amount and the QR request are shown separately. Guardian blocks a mismatch so you can review it with the merchant.</p></details>
-      <details className="faq-item"><summary>Is my bill information public? <ChevronRight size={16} /></summary><p>This frontend demo keeps sample bill information in the browser for the experience. Nothing here claims to be production privacy or a live payment system.</p></details>
-    </div></section>
-    <section className="landing-bottom"><div><span className="eyebrow">MONVEIL</span><div style={{ marginTop: 9 }}><strong>Save More. Lose Less.<br />Pay Smarter.</strong></div></div><Link className="button button--primary" to="/signin">Try the demo <ArrowRight size={17} /></Link></section>
-    <footer className="landing-footer"><span><ScanLine size={12} style={{ verticalAlign: '-2px', marginRight: 6 }} />TESTNET DEMO. DEMO TOKEN. NO REAL MONEY.</span><span style={{ marginLeft: 10 }}><Sparkles size={12} style={{ verticalAlign: '-2px', marginRight: 5 }} />AI explains. It never decides.</span></footer>
-  </div>;
+      </nav>
+
+      {/* ── Hero ───────────────────────────────────────────── */}
+      <section className="ln-hero" aria-label="MONVEIL hero">
+
+        {/* Left: copy */}
+        <div>
+          <motion.div
+            {...(reduceMotion ? {} : fadeUp(0))}
+            className="ln-copy-eyebrow"
+          >
+            <span className="ln-copy-eyebrow-dot" aria-hidden="true" />
+            Live on Monad testnet
+          </motion.div>
+
+          <motion.h1 {...(reduceMotion ? {} : fadeUp(1))} className="ln-headline">
+            Know before<br />you <em>approve.</em>
+          </motion.h1>
+
+          <motion.p {...(reduceMotion ? {} : fadeUp(2))} className="ln-subline">
+            A merchant signs the bill. You scan. Guardian verifies the seal,
+            amount, expiry and your rules - before you ever see a payment button.
+          </motion.p>
+
+          <motion.div {...(reduceMotion ? {} : fadeUp(3))} className="ln-cta-row">
+            <Link className="button button--primary" to="/signin" id="landing-try-demo-btn">
+              Try the demo <ArrowRight size={17} />
+            </Link>
+            <a className="button button--secondary" href="#how-it-works">
+              See how it works
+            </a>
+          </motion.div>
+
+          <motion.p {...(reduceMotion ? {} : fadeUp(4))} className="ln-demo-note">
+            No seed phrase &nbsp;·&nbsp; No real money &nbsp;·&nbsp; 5 demo scenarios
+          </motion.p>
+        </div>
+
+        {/* Right: interactive paper bill */}
+        <motion.div
+          className="ln-bill-col"
+          initial={reduceMotion ? false : { opacity: 0, x: 32 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.65, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+        >
+          {/* Tamper toggle */}
+          <div className="ln-tamper-toggle" role="group" aria-label="Toggle bill tamper state">
+            <button
+              id="landing-toggle-honest"
+              className={`ln-tamper-btn${!tampered ? ' active' : ''}`}
+              onClick={() => setTampered(false)}
+              aria-pressed={!tampered}
+            >
+              Honest bill
+            </button>
+            <button
+              id="landing-toggle-tampered"
+              className={`ln-tamper-btn${tampered ? ' active-red' : ''}`}
+              onClick={() => setTampered(true)}
+              aria-pressed={tampered}
+            >
+              Tampered QR
+            </button>
+          </div>
+
+          {/* Guardian ring + paper bill */}
+          <div className={`ln-guardian-ring${tampered ? ' tampered' : ''}`}>
+            <div className="ln-guardian-label" aria-label="Guardian status">
+              <ShieldCheck size={10} />
+              {tampered ? 'GUARDIAN BLOCKED' : 'GUARDIAN VERIFIED'}
+            </div>
+            <PaperBill tampered={tampered} />
+          </div>
+
+          <ModeBadge mode="demo" label="TESTNET · DEMO TOKEN" />
+        </motion.div>
+      </section>
+
+      {/* ── Scroll story ───────────────────────────────────── */}
+      <section id="how-it-works" className="ln-story" aria-label="How MONVEIL works">
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.2 }}
+          transition={{ duration: 0.5 }}
+          style={{ textAlign: 'center', marginBottom: '64px' }}
+        >
+          <span className="eyebrow" style={{ color: 'var(--brand-light)' }}>How it works</span>
+          <h2 className="headline" style={{ fontSize: 'clamp(28px, 4vw, 48px)', marginTop: '12px', color: '#fff' }}>
+            Five checks. One sentence. You decide.
+          </h2>
+        </motion.div>
+
+        <div className="ln-story-steps">
+          {storySteps.map((step, i) => (
+            <motion.div
+              key={step.num}
+              className="ln-story-step"
+              initial={reduceMotion ? false : { opacity: 0, x: -24 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true, amount: 0.3 }}
+              transition={{ duration: 0.5, delay: i * 0.05 }}
+            >
+              <div className="ln-story-num" aria-hidden="true">{step.num}</div>
+              <div>
+                <h3 className="ln-story-step-title">{step.title}</h3>
+                <p className="ln-story-step-body">{step.body}</p>
+                <span className={`ln-story-step-tag ${step.tag.cls}`}>
+                  {step.tag.label}
+                </span>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── Bento features ─────────────────────────────────── */}
+      <section className="ln-bento" aria-label="Features">
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.2 }}
+          transition={{ duration: 0.45 }}
+          style={{ textAlign: 'center', marginBottom: '40px' }}
+        >
+          <span className="eyebrow" style={{ color: 'var(--brand-light)' }}>Built on real tools</span>
+          <h2 className="headline" style={{ fontSize: 'clamp(26px, 3.5vw, 42px)', marginTop: '12px', color: '#fff' }}>
+            Guardian never sleeps.
+          </h2>
+        </motion.div>
+
+        <div className="ln-bento-grid">
+          {bentoCards.map((card, i) => (
+            <motion.article
+              key={card.title}
+              className={`ln-bento-card${card.wide ? ' wide' : ''}`}
+              initial={reduceMotion ? false : { opacity: 0, y: 18 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, amount: 0.2 }}
+              transition={{ duration: 0.45, delay: i * 0.06 }}
+            >
+              <div className="ln-bento-icon" aria-hidden="true">{card.icon}</div>
+              <h3 className="ln-bento-title">{card.title}</h3>
+              <p className="ln-bento-body">{card.body}</p>
+            </motion.article>
+          ))}
+        </div>
+      </section>
+
+      {/* ── CTA footer ─────────────────────────────────────── */}
+      <section className="ln-cta-footer" aria-label="Call to action">
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: 0.5 }}
+        >
+          <h2 className="ln-cta-footer-title">
+            Save More. Lose Less.<br /><em>Pay Smarter.</em>
+          </h2>
+          <p className="ln-cta-footer-sub">
+            Try all five demo scenarios: honest bill, tampered QR, replay, over-limit, expired.
+          </p>
+          <Link className="button button--primary" to="/signin" id="landing-cta-launch-btn"
+            style={{ fontSize: '1rem', padding: '0.8rem 2rem' }}>
+            Launch the demo <ArrowRight size={18} />
+          </Link>
+
+          <div className="ln-footer-legal">
+            TESTNET DEMO &nbsp;·&nbsp; DEMO TOKEN &nbsp;·&nbsp; NO REAL MONEY &nbsp;·&nbsp;
+            AI EXPLAINS &nbsp;·&nbsp; IT NEVER DECIDES
+          </div>
+        </motion.div>
+      </section>
+
+    </div>
+  );
 }
