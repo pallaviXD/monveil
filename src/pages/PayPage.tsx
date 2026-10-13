@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, LockKeyhole, ShieldCheck, XCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, LockKeyhole, ShieldCheck, AlertOctagon } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { useDemo } from '../app/DemoContext';
 import { EmptyState, ModeBadge, Skeleton, Surface, StatusIcon } from '../components/ui';
 import { formatINR } from '../domain/money';
@@ -13,7 +14,11 @@ export function PayPage() {
   const timer = useRef<number | undefined>(undefined);
   const startedAt = useRef(0);
   const completed = useRef(false);
-  useEffect(() => { if (bill && !result && !loading) void evaluateBill(); }, [bill, result, loading, evaluateBill]);
+
+  useEffect(() => {
+    if (bill && !result && !loading) void evaluateBill();
+  }, [bill, result, loading, evaluateBill]);
+
   const startHold = () => {
     if (result?.verdict !== 'safe' || completed.current) return;
     window.clearInterval(timer.current);
@@ -30,25 +35,169 @@ export function PayPage() {
       }
     }, 30);
   };
+
   const stopHold = () => {
     window.clearInterval(timer.current);
     timer.current = undefined;
     if (!completed.current) setProgress(0);
   };
+
   useEffect(() => () => window.clearInterval(timer.current), []);
-  if (!bill) return <div className="content-wrap"><EmptyState title="Nothing to pay yet" body="Scan a bill and see Guardian’s checks before reviewing any payment." action={<Link className="button button--primary" to="/scan">Scan a bill</Link>} /></div>;
-  if (!result) return <div className="content-wrap"><PageHeading eyebrow="PAYMENT REVIEW" title="Checking before you continue…" /><Surface className="surface--pad"><Skeleton className="skeleton-block" /></Surface></div>;
+
+  if (!bill) {
+    return (
+      <div className="content-wrap">
+        <EmptyState
+          title="Nothing to pay yet"
+          body="Scan a bill and inspect Guardian’s verification before reviewing payments."
+          action={
+            <Link className="button button--primary" to="/scan">
+              Scan a bill
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (!result) {
+    return (
+      <div className="content-wrap">
+        <PageHeading eyebrow="PAYMENT REVIEW" title="Checking before you continue…" />
+        <Surface className="surface--pad">
+          <Skeleton className="skeleton-block" />
+        </Surface>
+      </div>
+    );
+  }
+
   const blocked = result.verdict === 'blocked';
-  const reason = blocked ? (result.reasonCode === 'amount' ? 'The QR asks for a different amount than the merchant signed. Review the bill before continuing.' : result.reasonCode === 'expiry' ? 'This bill has expired. Ask the merchant for a current bill.' : result.reasonCode === 'duplicate' ? 'This bill has already been paid in the demo. A duplicate payment is blocked.' : result.reasonCode === 'rules' ? 'This amount is above your Rs 2,000 per-payment limit or another saved rule.' : 'The bill seal could not be matched. Ask the merchant to create a new signed bill.') : '';
-  return <div className="content-wrap"><PageHeading eyebrow="PAYMENT REVIEW" title="One last look." description="Confirm only after checking the amount and bill details." action={<ModeBadge mode={integrationConfig.chainMode} label={`PAYMENT · ${integrationConfig.chainMode.toUpperCase()}`} />} />
-    <div className="pay-layout"><Surface className="pay-summary">
-      <span className="eyebrow">QR AMOUNT REQUESTED</span><div className="pay-amount">{formatINR(bill.amountPaise)}</div><div className="pay-merchant"><span className="merchant-avatar"><ShieldCheck size={19} /></span><div><strong>{bill.merchantName}</strong><small>Merchant-signed bill · {bill.id}</small></div><StatusIcon verdict={result.verdict} /></div>
-      <div className="pay-row"><span>Token</span><strong>Demo token</strong></div><div className="pay-row"><span>Network</span><strong>Testnet · simulated</strong></div><div className="pay-row"><span>Merchant signed</span><strong>{formatINR(bill.signedTotalPaise)}</strong></div>
-      <div className="pay-safety"><LockKeyhole size={15} /><span>This is a demo payment. No real money moves.</span></div>
-      {blocked && <div className="blocked-reason" role="alert"><XCircle size={15} style={{ verticalAlign: '-3px', marginRight: 6 }} />{reason}</div>}
-      <button type="button" className="hold-button" disabled={blocked || loading} aria-label={blocked ? 'Payment blocked by Guardian' : 'Press and hold to confirm payment'} onPointerDown={startHold} onPointerUp={stopHold} onPointerLeave={stopHold} onPointerCancel={stopHold} onKeyDown={(event) => { if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); startHold(); } }} onKeyUp={(event) => { if (event.key === ' ' || event.key === 'Enter') stopHold(); }}>
-        <span className="hold-progress" style={{ width: `${progress}%` }} /><span className="hold-label">{blocked ? 'Payment blocked' : progress > 0 ? `Keep holding · ${Math.min(100, progress)}%` : <>Press and hold to confirm <ArrowRight size={16} /></>}</span>
-      </button><p className="hold-help">{blocked ? 'Review the reason above. Guardian will not send this payment.' : 'Hold for a moment. Let go to cancel.'}</p>
-    </Surface><div className="pay-foot"><Link to="/verdict" className="button button--ghost"><ArrowLeft size={15} /> Back to Guardian checks</Link><ModeBadge mode="demo" label="NO REAL MONEY" /></div></div>
-  </div>;
+  const reason = blocked
+    ? result.reasonCode === 'amount'
+      ? 'The QR asks for a different amount than the merchant signed. Settlement is permanently blocked.'
+      : result.reasonCode === 'expiry'
+      ? 'This bill has expired. Ask the merchant for a fresh signed bill.'
+      : result.reasonCode === 'duplicate'
+      ? 'This bill has already been paid in the demo. A duplicate payment is blocked.'
+      : result.reasonCode === 'rules'
+      ? 'This amount is above your ₹2,000 per-payment limit or triggers a security rule.'
+      : 'The bill HMAC seal could not be verified against the merchant key.'
+    : '';
+
+  return (
+    <div className="content-wrap">
+      <PageHeading
+        eyebrow="STAGE 3 · FINAL CONFIRMATION"
+        title="One last look."
+        description="Verify the destination merchant and final amount. Once approved, settlement executes on Monad testnet."
+        action={
+          <ModeBadge
+            mode={integrationConfig.chainMode}
+            label={`SETTLEMENT · ${integrationConfig.chainMode.toUpperCase()}`}
+          />
+        }
+      />
+
+      <div className="pay-layout">
+        <Surface className="pay-summary">
+          <span className="eyebrow">FINAL SETTLEMENT AMOUNT</span>
+          <div className="pay-amount font-editorial">{formatINR(bill.amountPaise)}</div>
+
+          <div className="pay-merchant">
+            <span className="merchant-avatar">
+              <ShieldCheck size={20} />
+            </span>
+            <div>
+              <strong>{bill.merchantName}</strong>
+              <small>Merchant-signed payload · {bill.id}</small>
+            </div>
+            <StatusIcon verdict={result.verdict} />
+          </div>
+
+          <div className="pay-row">
+            <span>Settlement Token</span>
+            <strong>MON (Demo testnet token)</strong>
+          </div>
+          <div className="pay-row">
+            <span>Target Network</span>
+            <strong>Monad Testnet (Chain ID 10143)</strong>
+          </div>
+          <div className="pay-row">
+            <span>Merchant Signed Total</span>
+            <strong>{formatINR(bill.signedTotalPaise)}</strong>
+          </div>
+          <div className="pay-row">
+            <span>Guardian Policy Check</span>
+            <strong style={{ color: blocked ? 'var(--red)' : 'var(--green)' }}>
+              {blocked ? 'BLOCKED BY POLICY' : 'VERIFIED SAFE ✓'}
+            </strong>
+          </div>
+
+          <div className="pay-safety">
+            <LockKeyhole size={15} />
+            <span>Monad testnet demo payment. Demo tokens only. No real money moves.</span>
+          </div>
+
+          {blocked && (
+            <motion.div
+              className="blocked-reason"
+              role="alert"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <AlertOctagon size={16} style={{ verticalAlign: '-3px', marginRight: 8, flex: 'none' }} />
+              <span>{reason}</span>
+            </motion.div>
+          )}
+
+          <motion.button
+            type="button"
+            className="hold-button"
+            disabled={blocked || loading}
+            aria-label={blocked ? 'Payment blocked by Guardian' : 'Press and hold to confirm payment'}
+            onPointerDown={startHold}
+            onPointerUp={stopHold}
+            onPointerLeave={stopHold}
+            onPointerCancel={stopHold}
+            onKeyDown={(event) => {
+              if (event.key === ' ' || event.key === 'Enter') {
+                event.preventDefault();
+                startHold();
+              }
+            }}
+            onKeyUp={(event) => {
+              if (event.key === ' ' || event.key === 'Enter') stopHold();
+            }}
+            whileTap={blocked ? {} : { scale: 0.99 }}
+          >
+            <span className="hold-progress" style={{ width: `${progress}%` }} />
+            <span className="hold-label">
+              {blocked ? (
+                'Payment blocked by Guardian'
+              ) : progress > 0 ? (
+                `Authorizing · ${Math.min(100, progress)}%`
+              ) : (
+                <>
+                  Press and hold to authorize <ArrowRight size={16} />
+                </>
+              )}
+            </span>
+          </motion.button>
+
+          <p className="hold-help">
+            {blocked
+              ? 'Review the blocked rule above. Guardian refuses to sign or broadcast this transaction.'
+              : 'Press and hold for 1.2s to broadcast. Release early to cancel.'}
+          </p>
+        </Surface>
+
+        <div className="pay-foot">
+          <Link to="/verdict" className="button button--ghost">
+            <ArrowLeft size={15} /> Back to Guardian checks
+          </Link>
+          <ModeBadge mode="demo" label="NO REAL MONEY" />
+        </div>
+      </div>
+    </div>
+  );
 }
