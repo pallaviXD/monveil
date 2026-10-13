@@ -9,9 +9,9 @@ import { BrandLogo, ModeBadge, StatusRail } from '../components/ui';
 import { PaperBill } from '../components/primitives/PaperBill';
 import '../styles/landing.css';
 
-// Lazy-load the WebGL aurora – if it fails, the CSS fallback shows
-const AuroraCanvas = lazy(() =>
-  import('../components/primitives/AuroraCanvas').then(m => ({ default: m.AuroraCanvas }))
+// Lazy-load the 3D Smoky-Glass background scene
+const SmokyGlassCanvas = lazy(() =>
+  import('../components/primitives/SmokyGlassCanvas').then(m => ({ default: m.SmokyGlassCanvas }))
 );
 
 const storySteps = [
@@ -124,7 +124,7 @@ export function LandingPage() {
           />
         ) : webglOk ? (
           <Suspense fallback={<div className="landing-aurora-fallback" />}>
-            <AuroraCanvas />
+            <SmokyGlassCanvas />
           </Suspense>
         ) : (
           <div className="landing-aurora-fallback" />
