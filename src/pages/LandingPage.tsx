@@ -151,7 +151,7 @@ export function LandingPage() {
 
           <motion.p {...(reduceMotion ? {} : fadeUp(2))} className="ln-subline">
             A merchant signs the bill. You scan. Guardian verifies the seal,
-            amount, expiry and your rules — before you ever see a payment button.
+            amount, expiry and your rules - before you ever see a payment button.
           </motion.p>
 
           <motion.div {...(reduceMotion ? {} : fadeUp(3))} className="ln-cta-row">
@@ -291,7 +291,7 @@ export function LandingPage() {
             Save More. Lose Less.<br /><em>Pay Smarter.</em>
           </h2>
           <p className="ln-cta-footer-sub">
-            Try all five demo scenarios — honest bill, tampered QR, replay, over-limit, expired.
+            Try all five demo scenarios: honest bill, tampered QR, replay, over-limit, expired.
           </p>
           <Link className="button button--primary" to="/signin" id="landing-cta-launch-btn"
             style={{ fontSize: '1rem', padding: '0.8rem 2rem' }}>
