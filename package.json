@@ -2,7 +2,6 @@
   "name": "monveil",
   "private": true,
   "version": "0.1.0",
-  "packageManager": "pnpm@10.12.1",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
@@ -11,10 +10,14 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.1",
     "@vitejs/plugin-react": "^4.5.2",
     "canvas-confetti": "^1.9.4",
     "framer-motion": "^12.23.12",
+    "gsap": "^3.15.0",
     "jsqr": "^1.4.0",
+    "lenis": "^1.3.26",
     "lucide-react": "^0.468.0",
     "qrcode": "^1.5.4",
     "react": "^19.1.0",
@@ -37,5 +40,8 @@
     "typescript": "~5.8.3",
     "viem": "^2.57.5",
     "vitest": "^3.2.4"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true
   }
 }
