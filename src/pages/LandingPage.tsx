@@ -99,12 +99,30 @@ export function LandingPage() {
     }
   }, []);
 
+  const [hasVideo, setHasVideo] = useState(false);
+
+  useEffect(() => {
+    const v = document.createElement('video');
+    v.src = '/smoky-glass-loop.mp4';
+    v.onloadeddata = () => setHasVideo(true);
+    v.onerror = () => setHasVideo(false);
+  }, []);
+
   return (
     <div style={{ position: 'relative', background: 'var(--canvas-0)', minHeight: '100dvh', color: '#fff', overflowX: 'hidden' }}>
 
-      {/* ── Aurora background ───────────────────────────────── */}
+      {/* ── Aurora / 3D Smoky-Glass background ─────────────────── */}
       <div className="landing-aurora" aria-hidden="true">
-        {webglOk ? (
+        {hasVideo ? (
+          <video
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="landing-bg-video"
+            src="/smoky-glass-loop.mp4"
+          />
+        ) : webglOk ? (
           <Suspense fallback={<div className="landing-aurora-fallback" />}>
             <AuroraCanvas />
           </Suspense>
