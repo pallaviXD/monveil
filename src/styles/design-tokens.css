@@ -1,0 +1,265 @@
+/* ================================================================
+   MONVEIL – "Cinematic indigo & paper" design tokens
+   ================================================================ */
+
+:root {
+  /* ── Canvas ────────────────────────────────────────────────── */
+  --canvas-0: #0b0b1e;
+  --canvas-1: #12102b;
+  --canvas-gradient: linear-gradient(160deg, #0b0b1e 0%, #12102b 100%);
+
+  /* ── Brand (electric violet + lavender) ─────────────────────── */
+  --brand:          #9a4dff;   /* electric violet */
+  --brand-light:    #c28fff;   /* lavender */
+  --brand-dim:      rgba(154, 77, 255, 0.18);
+  --brand-glow:     rgba(154, 77, 255, 0.35);
+  --brand-border:   rgba(154, 77, 255, 0.4);
+
+  /* ── Paper ───────────────────────────────────────────────────── */
+  --paper:          #f4efe6;
+  --paper-dark:     #e8e2d8;
+  --paper-ink:      #1a1622;   /* dark text on paper */
+  --paper-muted:    #6b6460;
+
+  /* ── Status ──────────────────────────────────────────────────── */
+  --status-green:   #3ddc97;
+  --status-green-bg: rgba(61, 220, 151, 0.12);
+  --status-amber:   #ffb020;
+  --status-amber-bg: rgba(255, 176, 32, 0.12);
+  --status-red:     #ff5d5d;
+  --status-red-bg:  rgba(255, 93, 93, 0.12);
+
+  /* ── Glass (subtle only) ─────────────────────────────────────── */
+  --glass-border:   rgba(255, 255, 255, 0.07);
+  --glass-fill:     rgba(255, 255, 255, 0.04);
+  --glass-fill-md:  rgba(255, 255, 255, 0.07);
+
+  /* ── Typography ─────────────────────────────────────────────── */
+  --font-head:   'Fraunces', Georgia, serif;
+  --font-ui:     'Inter Tight', 'Inter', system-ui, sans-serif;
+  --font-mono:   'JetBrains Mono', 'Fira Code', monospace;
+
+  /* ── Spacing scale ───────────────────────────────────────────── */
+  --sp-1:  4px;
+  --sp-2:  8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+  --sp-20: 80px;
+  --sp-24: 96px;
+
+  /* ── Radius ──────────────────────────────────────────────────── */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-full: 9999px;
+
+  /* ── Shadows ─────────────────────────────────────────────────── */
+  --shadow-card: 0 2px 12px rgba(0,0,0,0.3);
+  --shadow-paper: 0 4px 24px rgba(0,0,0,0.25), 0 1px 4px rgba(0,0,0,0.15);
+  --shadow-brand: 0 0 24px var(--brand-glow);
+
+  /* ── Transitions ─────────────────────────────────────────────── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 150ms;
+  --dur-base: 250ms;
+  --dur-slow: 450ms;
+
+  /* ── Z-index layers ──────────────────────────────────────────── */
+  --z-base:    1;
+  --z-card:    10;
+  --z-sticky:  100;
+  --z-modal:   1000;
+  --z-toast:   2000;
+}
+
+/* ================================================================
+   Reduced-motion: strip animations globally
+   ================================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ================================================================
+   Utility classes
+   ================================================================ */
+
+/* Canvas background */
+.canvas-bg {
+  background: var(--canvas-gradient);
+  min-height: 100dvh;
+  color: #fff;
+}
+
+/* Glass surface – thin border + faint fill */
+.glass {
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.glass-md {
+  background: var(--glass-fill-md);
+  border: 1px solid var(--glass-border);
+}
+
+/* Paper card */
+.paper-card {
+  background: var(--paper);
+  color: var(--paper-ink);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-paper);
+}
+
+/* Perforated edge for paper bills */
+.paper-perforate-top {
+  position: relative;
+}
+.paper-perforate-top::before {
+  content: '';
+  display: block;
+  height: 10px;
+  background: radial-gradient(circle at 50% 0, transparent 6px, var(--paper) 6px) 0 0 / 16px 10px repeat-x;
+  margin-bottom: -2px;
+}
+
+/* Brand button */
+.btn-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0.65rem 1.3rem;
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-base) var(--ease-out),
+              box-shadow var(--dur-base) var(--ease-out),
+              transform var(--dur-fast) var(--ease-out);
+}
+.btn-brand:hover {
+  background: var(--brand-light);
+  box-shadow: var(--shadow-brand);
+  transform: translateY(-1px);
+}
+.btn-brand:active { transform: translateY(0); }
+
+/* Ghost button */
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 0.65rem 1.3rem;
+  background: var(--glass-fill);
+  color: var(--brand-light);
+  border: 1px solid var(--brand-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--dur-base) var(--ease-out),
+              border-color var(--dur-base) var(--ease-out);
+}
+.btn-ghost:hover {
+  background: var(--brand-dim);
+  border-color: var(--brand);
+}
+
+/* Status tags */
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-full);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.status-ok     { background: var(--status-green-bg); color: var(--status-green); }
+.status-warn   { background: var(--status-amber-bg); color: var(--status-amber); }
+.status-danger { background: var(--status-red-bg);   color: var(--status-red); }
+
+/* Money / amounts – tabular numerals */
+.money {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+.money-lg {
+  font-family: var(--font-head);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* Headline */
+.headline {
+  font-family: var(--font-head);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+/* Mono ID text */
+.mono-id {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--brand-light);
+  opacity: 0.8;
+}
+
+/* Guardian ring */
+.guardian-ring {
+  border: 1px solid var(--brand-border);
+  border-radius: var(--radius-full);
+  box-shadow: 0 0 0 4px var(--brand-dim), inset 0 0 12px var(--brand-dim);
+  transition: box-shadow var(--dur-slow) var(--ease-out);
+}
+.guardian-ring.ok {
+  border-color: var(--status-green);
+  box-shadow: 0 0 0 4px rgba(61,220,151,0.15), inset 0 0 12px rgba(61,220,151,0.1);
+}
+.guardian-ring.danger {
+  border-color: var(--status-red);
+  box-shadow: 0 0 0 4px rgba(255,93,93,0.15), inset 0 0 12px rgba(255,93,93,0.1);
+}
+
+/* Divider */
+.divider {
+  border: none;
+  border-top: 1px solid var(--glass-border);
+  margin: var(--sp-4) 0;
+}
+
+/* Testnet banner */
+.testnet-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-1) var(--sp-4);
+  background: rgba(255, 176, 32, 0.08);
+  border-bottom: 1px solid rgba(255, 176, 32, 0.2);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--status-amber);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}

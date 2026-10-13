@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./design-tokens.css";
 @import "./tokens.css";
 
 :root{font-family:'Inter Tight',-apple-system,BlinkMacSystemFont,sans-serif;color:#F2F0FA;background:#0B0B1E;font-synthesis:none;text-rendering:optimizeLegibility;font-smooth:always;font-optical-sizing:auto;font-weight:400;--canvas:#0B0B1E;--canvas2:#12102B;--surface:#15142C;--surface2:#191832;--border:rgba(222,218,255,.11);--muted:#A8A5BD;--subtle:#79758F;--violet:#A78BFA;--lavender:#D8CCFF;--paper:#F4EFE6;--ink:#1D1A28;--green:#3DDC97;--amber:#FFB020;--red:#FF5D5D;--mono:'JetBrains Mono','IBM Plex Mono',monospace;--serif:'Fraunces',Georgia,serif;font-size:15px;font-variant-numeric:tabular-nums;}
